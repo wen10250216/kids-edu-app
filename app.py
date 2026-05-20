@@ -38,7 +38,7 @@ else:
 # ---------------------------------------------------------
 
 # 建立模型
-model = genai.GenerativeModel('gemini-1.5-flash-latest')
+model = genai.GenerativeModel('gemini-pro-vision')
 
 # 3. 網頁標題與副標
 st.title("🌿 幼兒學習發展分析系統")
