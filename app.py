@@ -1,36 +1,90 @@
 import streamlit as st
+import google.generativeai as genai
+from PIL import Image
 
-# 設定網頁風格
-st.set_page_config(page_title="幼兒發展與教具分析系統", page_icon="🌱")
+# 1. 網頁風格設定 (日系馬卡龍色系)
+st.set_page_config(page_title="幼兒學習發展分析系統", page_icon="🍃", layout="centered")
 
-st.title("🌱 幼兒發展與教具互動分析系統")
-st.markdown("### 結合 AI 視覺辨識，給予最溫暖的適性教學建議")
-st.write("請上傳幼兒的作品或遊戲照片，系統將輔助您進行專業的發展評估與引導。")
+# 使用自定義 CSS 來美化介面
+st.markdown("""
+    <style>
+    .main {
+        background-color: #f0f7fa; /* 淡藍色底 */
+    }
+    .stButton>button {
+        background-color: #ffccbc; /* 馬卡龍淡橘色按鈕 */
+        color: #5d4037;
+        border-radius: 20px;
+        border: none;
+        padding: 10px 25px;
+        font-weight: bold;
+    }
+    h1 {
+        color: #4a6572;
+        text-align: center;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# ---------------------------------------------------------
+# 🔑 【金鑰讀取區】
+# 這裡不需要「手動貼上」金鑰，它會自動抓取你在 Streamlit Secrets 設定的值
+# ---------------------------------------------------------
+if "GEMINI_API_KEY" in st.secrets:
+    # 這裡的 st.secrets["GEMINI_API_KEY"] 就是對應你在黑色框框填寫的內容
+    genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+else:
+    st.error("❌ 尚未在 Streamlit Secrets 中偵測到 API Key，請檢查設定！")
+# ---------------------------------------------------------
+
+# 建立模型
+model = genai.GenerativeModel('gemini-1.5-flash')
+
+# 3. 網頁標題與副標
+st.title("🌿 幼兒學習發展分析系統")
+st.markdown("<p style='text-align: center;'>結合 AI 視覺辨識，給予最溫暖的適性教學建議</p>", unsafe_allow_html=True)
 st.divider()
 
-# 建立輸入區塊
-col1, col2 = st.columns(2)
-with col1:
-    uploaded_file = st.file_uploader("📸 上傳幼兒作品或遊戲照片", type=["jpg", "png", "jpeg"])
-with col2:
-    child_age = st.text_input("🎈 輸入幼兒年齡 (例如：3歲6個月)")
+# 4. 幼兒互動紀錄區
+st.subheader("📸 幼兒互動紀錄")
+col_upload, col_age = st.columns([2, 1])
+
+with col_upload:
+    uploaded_file = st.file_uploader("上傳幼兒作品或遊戲照片", type=["jpg", "jpeg", "png"])
+
+with col_age:
+    child_age = st.text_input("🎈 兒童年齡", placeholder="例如：5歲9個月")
 
 st.divider()
 
-# 按下按鈕後執行分析
-if st.button("✨ 開始智慧分析", use_container_width=True):
-    if uploaded_file is not None and child_age:
-        with st.spinner("AI 正在以溫柔的視角觀察作品中..."):
-            
-            # 這裡暫時放入「模擬的分析結果」，讓您先看看排版效果！
-            st.success("分析完成！請參考以下適性建議：")
-            
-            st.info("**👁️ 視覺觀察：**\n\n兩個精確的積木結構，利用對比色彩營造十字帶狀效果，並在下方弧形積木模擬蝴蝶結的造型。")
-            st.warning("**📈 發展常模比對：**\n\n展現了3-4歲幼兒「象徵期」的特徵。能運用色彩分類與精確概念進行創作，把抽象積木賦予具體事物的意義，符合空間邏輯發展。")
-            st.success("**🌟 現有能力評估：**\n\n孩子鍛鍊了出色的預先規劃能力與美感協調性。他不僅能精確對準積木邊角，更鍛鍊了從二維規律走向三維造型的穩定手眼協調，目前的自信心非常強健。")
-            
-            st.markdown("### 🌱 適性引導與拓展")
-            st.markdown("- **提問引導：**『這兩個漂亮的禮盒是要送誰的驚喜呢？我們一起來猜猜看，裡面藏著什麼神奇的寶貝呀？』")
-            st.markdown("- **玩法延伸：**邀請幼兒進行『大小比較』。可以鼓勵他嘗試做一個『更小』或『超級大』的禮物盒，加深空間量感的對比概念。")
+# 5. 執行分析
+if st.button("✨ 開始智能分析", use_container_width=True):
+    if uploaded_file and child_age:
+        with st.spinner("AI 老師正在用心觀察孩子的成長..."):
+            try:
+                img = Image.open(uploaded_file)
+                
+                # 分析指令
+                prompt = f"""
+                你是一位資深的幼兒教育專家。請觀察照片中幼兒的作品或行為，
+                並根據年齡「{child_age}」進行專業分析。
+                請嚴格依照以下標題進行 Markdown 排版：
+                ### 👁️ 【幼兒觀察紀錄】
+                ### 📈 【發展領域分析】
+                ### 🌟 【現有能力評估】
+                ### 🌱 【智慧鷹架引導】
+                ### 📝 【老師筆記】
+                語氣請保持日系療育、溫柔感。
+                """
+                
+                response = model.generate_content([prompt, img])
+                
+                st.subheader("📝 智能分析報告")
+                st.markdown(response.text)
+                
+            except Exception as e:
+                st.error(f"分析過程出現錯誤：{e}")
     else:
-        st.error("請記得上傳照片並輸入年齡喔！")
+        st.warning("請記得先上傳照片並填寫孩子的年齡喔！")
+
+st.markdown("<br><p style='text-align: center; color: #b0bec5;'>🍃 陪伴孩子在愛與智慧中發芽 🍃</p>", unsafe_allow_html=True)
