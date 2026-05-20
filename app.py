@@ -3,104 +3,101 @@ import google.generativeai as genai
 from PIL import Image
 
 # 1. 網頁風格設定 (日系手繪療育風)
-st.set_page_config(page_title="幼兒學習發展分析系統", page_icon="🍃", layout="centered")
+st.set_page_config(page_title="幼兒學習發展分析系統", page_icon="🌿", layout="centered")
 
 st.markdown("""
     <style>
-    .stApp { background-color: #f0f7fa !important; }
-    h1 { color: #5d707a !important; text-align: center; font-weight: bold; }
+    .stApp { background-color: #fdfcfb; }
+    h1 { color: #4e342e !important; text-align: center; font-weight: bold; }
     div.stButton > button:first-child {
         background-color: #ffccbc !important;
         color: #5d4037 !important;
-        border-radius: 25px !important;
-        border: 2px solid #ffb6a0 !important;
+        border-radius: 20px !important;
+        border: none !important;
         font-weight: bold !important;
         width: 100% !important;
-        box-shadow: 0px 4px 12px rgba(0,0,0,0.05) !important;
+        padding: 10px !important;
     }
     .report-card {
-        background: rgba(255, 255, 255, 0.8);
+        background: white;
         padding: 25px;
-        border-radius: 20px;
-        border-left: 10px solid #b2dfdb;
-        box-shadow: 0px 10px 30px rgba(0,0,0,0.05);
+        border-radius: 15px;
+        border: 1px solid #eee;
+        box-shadow: 0px 4px 15px rgba(0,0,0,0.05);
     }
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 安全讀取 API Key 與模型初始化
+# 2. 模型設定
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 else:
-    st.error("❌ 尚未偵測到 API Key")
+    st.error("❌ 尚未設定 API Key")
 
 try:
     available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-    target_model_name = next((m for m in available_models if 'gemini-1.5-flash' in m), available_models[0])
-    model = genai.GenerativeModel(target_model_name)
+    target_model = next((m for m in available_models if 'gemini-1.5-flash' in m), available_models[0])
+    model = genai.GenerativeModel(target_model)
 except:
     model = genai.GenerativeModel('gemini-1.5-flash')
 
 # 3. 介面呈現
-st.markdown("<h1>🌿 幼兒學習發展分析系統</h1>", unsafe_allow_html=True)
+st.markdown("<h1>🌿 幼兒觀察與親師共育系統</h1>", unsafe_allow_html=True)
 st.divider()
 
-st.subheader("📸 幼兒互動紀錄")
 col_name, col_age = st.columns(2)
 with col_name:
-    child_name = st.text_input("🎨 幼兒姓名或暱稱", placeholder="例如：小芽")
+    child_name = st.text_input("🎨 幼兒姓名", placeholder="小芽")
 with col_age:
     child_age = st.text_input("🎈 幼兒年齡", placeholder="例如：5歲2個月")
 
+teacher_notes = st.text_area("✍️ 老師的補充觀察 (選填)", placeholder="例如：今天挑戰積木時，雖然倒了三次但還是笑著說要蓋更堅固的...")
+
 uploaded_file = st.file_uploader("🖼️ 上傳作品或行為照片", type=["jpg", "jpeg", "png"])
-st.divider()
 
 # 4. 執行分析
-if st.button("✨ 開始智能分析"):
+if st.button("✨ 生成專業觀察紀錄"):
     if uploaded_file and child_age and child_name:
-        with st.spinner(f"AI 老師正在用心觀察 {child_name} 的成長回憶..."):
+        with st.spinner(f"正在為 {child_name} 撰寫專業觀察紀錄..."):
             try:
                 img = Image.open(uploaded_file)
                 
-                # 精確調整後的專業指令
+                # 嚴格校準後的專業指令
                 prompt = f"""
-                你是一位資深的幼兒教育專家。請觀察照片並根據以下資訊進行分析：
-                - 幼兒姓名：{child_name}
-                - 幼兒年齡：{child_age}
+                你是一位資深的幼兒教育專家。請觀察照片並根據以下資訊撰寫報告：
+                - 幼兒：{child_name} ({child_age})
+                - 老師補充：{teacher_notes if teacher_notes else "無"}
 
-                請全程使用溫暖、療育且正向的語氣，嚴格依照以下格式排版：
+                請嚴格依照以下格式輸出：
 
-                ### 👁️ 【{child_name} 的觀察紀錄】
-                請詳細描述作品的形狀（如幾何特徵）、結構（如空間堆疊、對稱性）與色彩運用的美感特徵。
+                ### 👁️ 【{child_name} 的活動紀錄】
+                (具體描述作品形狀、空間結構與美感，並融入老師的補充細節)
 
                 ### 📈 【發展領域分析】
-                請針對幼兒教育六大領域（身體動作、認知、語文、社會、情緒、美感），分析 {child_name} 在這張照片中具體展現了哪些領域的發展。
+                (精確對應幼教六大領域之發展意義)
 
                 ### 🌟 【現有能力評估】
-                第一句話請務必對比「{child_age}」的發展常模，具體描述 {child_name} 是穩定達標、展現超越年齡的潛力，或是處於發展中的階段（請避免負面詞彙，如「遲緩」請改用「尚有發展空間」或「萌芽期」）。接著描述其展現出的優勢能力。
+                (對比 {child_age} 常模，給予正向肯定的專業評量)
 
                 ### 🌱 【智慧鷹架引導】
-                * **具體提問一**：(針對作品細節的開放式問題)
-                * **具體提問二**：(引發思考或動機的問題)
-                * **延伸玩法**：(建議一個具體的後續延伸活動，幫助其能力更上一層樓)
+                * **具體提問**：(設計 2 個引發思考的開放式問題)
+                * **延伸玩法**：(提供 1 個可執行的後續活動建議)
 
-                ### 📝 【給老師的小筆記】
-                請撰寫一段約 100 字、專業且充滿溫度的文字，適合老師直接應用於聯絡簿、作品集或個別化觀察紀錄中。
+                ### 📝 【親師溝通建議】
+                字數請嚴格控制在 150 字左右。請採用以下三段式結構書寫，對象為家長：
+                1. **點出具體事件**：描繪今天在學校觀察到的特定行為或情境。
+                2. **分析與肯定成長**：說明此行為背後的教育價值與孩子的進步亮點。
+                3. **建議(給家長的話)**：提供一個家中可配合或嘗試的具體育兒方向。
 
-                語氣請多使用溫暖的形容詞，並適度加入日系風格的符號（如 🌸, 🍃, ✨）。
+                語氣：溫暖、專業、正向，並使用 🌸, 🍃 等療育符號。
                 """
                 
                 response = model.generate_content([prompt, img])
-                
-                # 呈現結果
                 st.markdown("<div class='report-card'>", unsafe_allow_html=True)
-                st.subheader("📋 智能分析報告")
                 st.markdown(response.text)
                 st.markdown("</div>", unsafe_allow_html=True)
                 
             except Exception as e:
-                st.error(f"分析失敗，錯誤訊息：{e}")
+                st.error(f"系統忙碌中，請稍後再試。")
     else:
-        st.warning("請完整提供姓名、年齡並上傳照片喔！")
-
-st.markdown("<br><p style='text-align: center; color: #b0bec5;'>🍃 陪伴孩子在愛與智慧中發芽 🍃</p>", unsafe_allow_html=True)
+        st.warning("請填寫姓名、年齡並上傳照片。")
