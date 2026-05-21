@@ -49,12 +49,12 @@ st.divider()
 
 col_name, col_age = st.columns(2)
 with col_name:
-    child_name = st.text_input("🎨 幼兒姓名 / 暱稱", placeholder="例如：勒勒與雅雅")
+    child_name = st.text_input("🎨 幼兒姓名 / 暱稱", placeholder="例如：雅雅")
 with col_age:
     child_age = st.text_input("🎈 幼兒年齡", placeholder="例如：5歲9個月")
 
 teacher_notes = st.text_area("✍️ 老師的補充觀察 (選填)", 
-                            placeholder="例如：他們經過協商後，一起搭建積木...")
+                            placeholder="描述孩子的口語、動作、遇到挑戰時的反應等，能讓 AI 評估更準確。")
 
 uploaded_file = st.file_uploader("🖼️ 上傳觀察照片", type=["jpg", "jpeg", "png"])
 
