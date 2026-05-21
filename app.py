@@ -115,4 +115,4 @@ if st.button("✨ 生成專業觀察報告"):
     else:
         st.warning("請填寫姓名、年齡並上傳照片喔！")
 
-st.markdown("<br><p style='text-align: center; color: #b0bec5;'>🍃 陪伴孩子在愛與智慧中發芽 🍃</p>", unsafe_allow_html=True)
+st.markdown("<br><p style='text-align: center; color: #b0bec5;'>🍃 陪伴孩子在愛與智慧中萌芽 🍃</p>", unsafe_allow_html=True)
