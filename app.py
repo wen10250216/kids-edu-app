@@ -207,8 +207,6 @@ with st.sidebar:
         
         plot_df = pd.DataFrame(list(chart_data.items()), columns=['領域', '觀測次數'])
         fig = px.line_polar(plot_df, r='觀測次數', theta='領域', line_close=True, color_discrete_sequence=['#ffccbc'])
-        
-        # ✨ 完美安全修正：移除所有衝突的進階佈局設定，改用標準無死角的渲染方式 ✨
         fig.update_traces(fill='toself')
         fig.update_layout(
             polar=dict(radialaxis=dict(visible=True)),
@@ -309,7 +307,8 @@ with tab_record:
 
     uploaded_files = st.file_uploader("🖼️ 1. 上傳觀察照片 (多張連拍歷程)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
-   with st.expander("💡 第一次使用自訂模板？點我查看【專屬標籤設定教學】🌸"):
+    # ✨ 完美修正：這裡縮排與前後行完全對齊 4 個空格，內部文字對齊 8 個空格 ✨
+    with st.expander("💡 第一次使用自訂模板？點我查看【專屬標籤設定教學】🌸"):
         st.markdown("""
         為了讓系統完美接軌您學校的行政格式，請在您電腦裡既有的 Word 空白紀錄表中，將需要讓系統代筆的地方，打上對應的「魔法標籤」（請連同大括號一起複製貼上喔！）：
         
@@ -451,7 +450,7 @@ with tab_chart:
             st.plotly_chart(fig_line, use_container_width=True)
             
             st.markdown("#### 📜 歷史觀察足跡摘要")
-            st.dataframe(df_child[['日期', '座號', '幼兒姓名', '幼兒年齡', '對應領域', '學習指標', '現有能力評估', '親師溝通']], use_container_width=True, hide_index=True)
+            st.dataframe(df_child[['開期', '座號', '幼兒姓名', '幼兒年齡', '對應領域', '學習指標', '現有能力評估', '親師溝通']], use_container_width=True, hide_index=True)
     else:
         st.info("💡 目前歷史資料庫為空。請先在左側上傳歷史紀錄，或開始新增動態觀察吧！")
 
