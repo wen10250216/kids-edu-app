@@ -93,8 +93,9 @@ if 'current_child' not in st.session_state: st.session_state.current_child = ""
 if 'current_age' not in st.session_state: st.session_state.current_age = ""
 if 'roster' not in st.session_state: 
     st.session_state.roster = pd.DataFrame(columns=['座號', '幼兒姓名', '出生年月日 (例: 2022-05-20)'])
+# ✨ 雙贏欄位升級：歷史紀錄表中正式加入「觀察類型」欄位 ✨
 if 'session_history' not in st.session_state: 
-    st.session_state.session_history = pd.DataFrame(columns=['日期', '座號', '幼兒姓名', '幼兒年齡', '對應領域', '學習指標', '現有能力評估', '親師溝通'])
+    st.session_state.session_history = pd.DataFrame(columns=['日期', '座號', '幼兒姓名', '幼兒年齡', '觀察類型', '對應領域', '學習指標', '現有能力評估', '親師溝通'])
 
 # 4. Word 檔案生成函式
 def build_word_file(child_name, child_age, report_text, uploaded_images, template_file=None):
@@ -188,37 +189,44 @@ with st.sidebar:
     if history_file is not None:
         try:
             uploaded_df = pd.read_csv(history_file)
-            required_cols = ['日期', '座號', '幼兒姓名', '幼兒年齡', '對應領域', '學習指標', '現有能力評估', '親師溝通']
+            # 智慧相容：自動識別新舊欄位
+            if '觀察類型' not in uploaded_df.columns:
+                uploaded_df['觀察類型'] = "學習區活動" # 舊資料自動補全
+            
+            required_cols = ['日期', '座號', '幼兒姓名', '幼兒年齡', '觀察類型', '對應領域', '學習指標', '現有能力評估', '親師溝通']
             if all(col in uploaded_df.columns for col in required_cols):
                 st.session_state.session_history = uploaded_df
                 st.sidebar.success("🟢 班級歷史紀錄已智慧同步！")
             else:
-                st.sidebar.error("❌ 檔案欄位格式不符，請確認是從本系統下載的歷史檔。")
+                st.sidebar.error("❌ 檔案欄位格式不符。")
         except Exception as e:
             st.sidebar.error(f"檔案讀取失敗: {e}")
 
+    # ✨ 雙向度智慧大數據看板呈現 ✨
     if not st.session_state.session_history.empty:
-        st.markdown("---")
-        st.markdown("### 📊 班級整體觀測平衡診斷")
         df_history = st.session_state.session_history
+        
+        # 面向一：六大領域平衡 (雷達圖)
+        st.markdown("---")
+        st.markdown("### 📊 核心能力發展診斷 (六大領域)")
         domain_counts = df_history['對應領域'].value_counts().to_dict()
         all_domains = ["認知領域", "身體動作與健康領域", "語文領域", "社會領域", "情緒領域", "美感領域"]
         chart_data = {dom: domain_counts.get(dom, 0) for dom in all_domains}
-        
         plot_df = pd.DataFrame(list(chart_data.items()), columns=['領域', '觀測次數'])
-        fig = px.line_polar(plot_df, r='觀測次數', theta='領域', line_close=True, color_discrete_sequence=['#ffccbc'])
-        fig.update_traces(fill='toself')
-        fig.update_layout(
-            polar=dict(radialaxis=dict(visible=True)),
-            showlegend=False,
-            margin=dict(l=30, r=30, t=30, b=30),
-            height=220
-        )
-        st.plotly_chart(fig, use_container_width=True)
+        fig_radar = px.line_polar(plot_df, r='觀測次數', theta='領域', line_close=True, color_discrete_sequence=['#ffccbc'])
+        fig_radar.update_traces(fill='toself')
+        fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True)), showlegend=False, margin=dict(l=30, r=30, t=30, b=30), height=200)
+        st.plotly_chart(fig_radar, use_container_width=True)
         
-        blind_spots = [dom for dom, count in chart_data.items() if count < 3]
-        if blind_spots: st.warning(f"💡 觀測盲區警示：班級在『{', '.join(blind_spots)}』數據較少喔！")
-        else: st.success("🟢 班級觀測非常均衡！")
+        # 面向二：教學情境投放診斷 (水平長條圖)
+        st.markdown("### 📂 教學情境分佈診斷 (觀察類型)")
+        context_counts = df_history['觀察類型'].value_counts().to_dict()
+        all_contexts = ["學習區活動", "自由遊戲", "戶外活動", "團體活動", "生活自理"]
+        context_data = {ctx: context_counts.get(ctx, 0) for ctx in all_contexts}
+        context_df = pd.DataFrame(list(context_data.items()), columns=['情境', '次數'])
+        fig_bar = px.bar(context_df, x='次數', y='情境', orientation='h', color_discrete_sequence=['#b2dfdb'])
+        fig_bar.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=180, yaxis={'categoryorder':'total ascending'})
+        st.plotly_chart(fig_bar, use_container_width=True)
 
 # 6. 主畫面介面呈現 (大標題)
 st.markdown("<h1>🍃 幼兒學習發展分析系統</h1>", unsafe_allow_html=True)
@@ -232,7 +240,6 @@ tab_record, tab_chart, tab_roster = st.tabs(["📝 新增動態觀察", "📈 �
 # ---------------------------------------------------------
 with tab_roster:
     st.markdown("### 🎒 班級基本名單設定")
-    
     uploaded_roster_file = st.file_uploader("📂 快速載入以前建好的班級名單 (.csv)", type=["csv"], key="roster_file_uploader")
     if uploaded_roster_file is not None:
         try:
@@ -265,12 +272,7 @@ with tab_roster:
         csv_roster_buffer = io.StringIO()
         edited_roster_df.to_csv(csv_roster_buffer, index=False)
         roster_csv_bom = "\ufeff" + csv_roster_buffer.getvalue()
-        st.download_button(
-            label="📥 下載 / 備份本班級名單 (.csv)",
-            data=roster_csv_bom,
-            file_name="幼兒園班級名單_備份.csv",
-            mime="text/csv"
-        )
+        st.download_button(label="📥 下載 / 備份本班級名單 (.csv)", data=roster_csv_bom, file_name="幼兒園班級名單_備份.csv", mime="text/csv")
 
 # ---------------------------------------------------------
 # 分頁一：📝 新增動態觀察
@@ -303,24 +305,29 @@ with tab_record:
         final_child_age = calculate_age_from_dob(dob_birthday)
         st.info(f"✨ 班級名單連動成功！【座號：{final_seat_num} 號】 ➜ 系統自動精算當前實齡：**{final_child_age}**")
 
+    # ✨ 雙贏新選單：讓老師勾選觀察情境類型
+    st.write("---")
+    obs_type = st.selectbox(
+        "🎯 選擇本次觀察類型 / 情境情境",
+        ["學習區活動", "自由遊戲", "戶外活動", "團體活動", "生活自理"],
+        help="選擇此紀錄發生的情境，系統將自動同步到左側的『環境投放診斷看板』中喔！"
+    )
+
     teacher_notes = st.text_area("🖊️ 老師補充觀察 (為提升 AI 判定信心，建議補充以下資訊)", placeholder="1. 頻率：這是第一次發生、偶爾出現、還是穩定表現？\n2. 歷程：過程中是否失敗過？是否模仿同儕？\n3. 介入：老師有給予提示或動手幫忙嗎？\n4. 幼兒說的話：", key="input_notes")
 
     uploaded_files = st.file_uploader("🖼️ 1. 上傳觀察照片 (多張連拍歷程)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
     with st.expander("💡 第一次使用自訂模板？點我查看【專屬標籤設定教學】🌸"):
         st.markdown("""
-        為了讓系統完美接軌您學校的行政格式，請在您電腦裡既有的 Word 空白紀錄表中，將需要讓系統代筆的地方，打上對應的「魔法標籤」（請連同大括號一起複製貼上喔！）：
-        
+        為了讓系統完美接軌您學校的行政格式，請在您電腦裡既物理的 Word 空白紀錄表中，將需要讓系統代筆的地方，打上對應的「魔法標籤」：
         * 🖍️ **基本資訊**：`{{幼兒姓名}}`、`{{幼兒年齡}}`
         * 📝 **專業分析**：`{{活動紀錄}}`、`{{領域分析}}`、`{{能力評估}}`
         * 🌱 **支持策略**：`{{智慧鷹架}}`
         * 💌 **家長視角**：`{{親師溝通}}`
-        * 🖼️ **動態相片牆**：請在表格的空白格子內填入 `{{照片歷程}}`，系統會自動為您防變形整齊排版。
-        
-        > 💡 **老師的彈性自訂小技巧**：如果您學校的表格很精簡，只需要「姓名」和「親師溝通」，您在 Word 裡就**只要貼這兩個標籤就好**！其他沒貼的標籤系統會自動忽略，完全不會寫入 Word，但完整的專業分析依然會在網頁畫面上秀出來給您參考，請放心依據需求彈性設計。
+        * 🖼️ **動態相片牆**：`{{照片歷程}}`
         """)
 
-    template_file_upload = st.file_uploader("📄 2. 上傳學校既有 Word 紀錄表模板 (選填，不傳則用系統預設格式)", type=["docx"])
+    template_file_upload = st.file_uploader("📄 2. 上傳學校既有 Word 紀錄表模板 (選填)", type=["docx"])
 
     if st.button("🌟 生成專業觀察報告"):
         if uploaded_files and final_child_age and final_child_name:
@@ -352,7 +359,6 @@ with tab_record:
                     【判定結果】：(請擇一輸出：⭐ 正在建立 / ⭐⭐ 穩定運用 / ⭐⭐⭐ 靈活遷移)
                     【判定信心】：(請給出 0% - 100% 的估算值)
                     【主要依據】：簡述判定成立的核心觀察。
-                    // 這裡修復了一個微小的文字漏字錯誤
                     【尚缺證據】：指出若要提高信心分數還需要觀察到什麼。
 
                     第二段 (能力說明)：
@@ -391,11 +397,11 @@ with tab_record:
                     today_str = datetime.now().strftime("%Y-%m-%d")
                     new_row = pd.DataFrame([{
                         '日期': today_str, '座號': final_seat_num, '幼兒姓名': final_child_name, '幼兒年齡': final_child_age,
-                        '對應領域': extracted_domain, '學習指標': extracted_indicator,
+                        '觀察類型': obs_type, '對應領域': extracted_domain, '學習指標': extracted_indicator,
                         '現有能力評估': eval_summary, '親師溝通': note_summary[:100] + "..."
                     }])
                     st.session_state.session_history = pd.concat([st.session_state.session_history, new_row], ignore_index=True)
-                    st.toast("🎉 本次觀察已與名單智慧整合，請記得在下方下載更新歷史檔案喔！", icon="📝")
+                    st.toast("🎉 本次觀察已智慧連動雙向度指標！", icon="📝")
                         
                 except Exception as e:
                     st.error(f"系統發生錯誤，錯誤訊息：{e}")
@@ -416,12 +422,7 @@ with tab_record:
             csv_buffer = io.StringIO()
             st.session_state.session_history.to_csv(csv_buffer, index=False)
             csv_data_with_bom = "\ufeff" + csv_buffer.getvalue()
-            st.download_button(
-                label="📈 下載包含座號的完整歷史紀錄 (.csv)",
-                data=csv_data_with_bom,
-                file_name=f"班級整合學習歷程_{datetime.now().strftime('%m%d')}.csv",
-                mime="text/csv"
-            )
+            st.download_button(label="📈 下載包含座號的完整歷史紀錄 (.csv)", data=csv_data_with_bom, file_name=f"班級整合學習歷程_{datetime.now().strftime('%m%d')}.csv", mime="text/csv")
 
 # ---------------------------------------------------------
 # 分頁二：📈 幼兒個人成長看板
@@ -434,7 +435,12 @@ with tab_chart:
         selected_child = st.selectbox("🖍️ 請選擇要調閱成長圖表的幼兒姓名：", unique_children)
         
         if selected_child:
-            df_child = df_history[df_history['幼兒姓名'] == selected_child].sort_values(by='日期')
+            df_child = df_history[df_history['幼兒姓名'] == selected_child].copy()
+            
+            # ✨ 完美解決方案：將日期強制轉換為字串型態，徹底杜絕 00:00:00.0032 微秒 Bug！
+            df_child['日期'] = df_child['日期'].astype(str)
+            df_child = df_child.sort_values(by='日期')
+            
             st.markdown(f"#### 🍃 {selected_child} 的縱向能力發展軌跡")
             
             status_map = {"⭐ 正在建立": 1, "⭐⭐ 穩定運用": 2, "⭐⭐⭐ 靈活遷移": 3}
@@ -442,16 +448,18 @@ with tab_chart:
             
             fig_line = px.line(
                 df_child, x='日期', y='能力分數', color='對應領域', markers=True, text='現有能力評估',
-                title=f"📈 {selected_child} 的跨領域能力演進圖",
+                title=f"📈 {selected_child} 的跨領域能力演進圖 (不同領域自動分色)",
                 color_discrete_sequence=['#ffccbc', '#b2dfdb', '#ffe082', '#c5cae9', '#e1bee7', '#ffcdd2']
             )
             fig_line.update_yaxes(tickvals=[1, 2, 3], ticktext=["正在建立", "穩定運用", "靈活遷移"], range=[0.5, 3.5])
             fig_line.update_traces(textposition="top center")
+            
+            # ✨ 優化 X 軸：強制指定為類別軸，避免 Plotly 亂跳微秒
+            fig_line.update_xaxes(type='category')
             st.plotly_chart(fig_line, use_container_width=True)
             
             st.markdown("#### 📜 歷史觀察足跡摘要")
-            # ✨ 完美修復點：這行的 '開期' 已經順利改回 '日期' 囉！✨
-            st.dataframe(df_child[['日期', '座號', '幼兒姓名', '幼兒年齡', '對應領域', '學習指標', '現有能力評估', '親師溝通']], use_container_width=True, hide_index=True)
+            st.dataframe(df_child[['日期', '座號', '幼兒姓名', '幼兒年齡', '觀察類型', '對應領域', '學習指標', '現有能力評估', '親師溝通']], use_container_width=True, hide_index=True)
     else:
         st.info("💡 目前歷史資料庫為空。請先在左側上傳歷史紀錄，或開始新增動態觀察吧！")
 
