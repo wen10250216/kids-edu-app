@@ -167,12 +167,17 @@ with st.sidebar:
     
     user_sheet_url = st.text_input("🔗 請貼上您個人的 Google Sheet 網址", placeholder="https://docs.google.com/spreadsheets/d/...")
     
+    # ✨ 超級智慧防呆：如果沒設定 Secrets，這裡會貼心提醒，而不是直接當機紅字！
+    bot_email = "請先至後台 Settings -> Secrets 設定憑證金鑰"
+    if "gcp_service_account" in st.secrets:
+        bot_email = dict(st.secrets["gcp_service_account"]).get("client_email", bot_email)
+
     with st.expander("🛠️ 如何設定您的專屬開源資料庫？"):
         st.markdown(f"""
         1. 在您的雲端硬碟建立一個全新的 Google 試算表。
         2. 第一列打上欄位：`日期`, `幼兒姓名`, `幼兒年齡`, `對應領域`, `學習指標`, `現有能力評估`, `親師溝通`。
         3. 點擊右上角「共用」，將本系統官方搬運工加入為**編輯者**：
-        `{dict(st.secrets["gcp_service_account"]).get("client_email", "請先設定Secrets")}`
+        `{bot_email}`
         4. 複製該試算表網址貼到上方即可解鎖追蹤功能！
         """)
     
@@ -209,7 +214,7 @@ with st.sidebar:
 st.markdown("<h1>🍃 幼兒學習發展分析系統</h1>", unsafe_allow_html=True)
 st.divider()
 
-# ✨ 亮點升級：雙分頁系統 (切換新增與歷史調閱) ✨
+# 雙分頁系統
 tab_record, tab_chart = st.tabs(["📝 新增動態觀察", "📈 幼兒個人成長看板"])
 
 # ---------------------------------------------------------
@@ -338,49 +343,36 @@ with tab_record:
         st.download_button(label=f"💾 匯出 {st.session_state.current_child} 的 Word 報告", data=word_data, file_name=f"{st.session_state.current_child}_觀察紀錄表.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
 
 # ---------------------------------------------------------
-# ✨ 分頁二：智慧讀取與幼兒個人成長圖表分析 (智慧回調) ✨
+# 分頁二：智慧讀取與幼兒個人成長圖表分析
 # ---------------------------------------------------------
 with tab_chart:
     st.markdown("### 📈 幼兒長期發展成長圖表")
     
     if global_df is not None:
-        # 1. 智慧讀取：自動從試算表撈出所有不重複的幼兒名單
         unique_children = global_df['幼兒姓名'].unique().tolist()
-        
         selected_child = st.selectbox("🖍️ 請選擇要調閱成長圖表的幼兒姓名：", unique_children)
         
         if selected_child:
-            # 2. 智慧過濾：只篩選出該幼兒的歷史資料，並按日期排序
             df_child = global_df[global_df['幼兒姓名'] == selected_child].sort_values(by='日期')
-            
             st.markdown(f"#### 🍃 {selected_child} 的縱向能力發展軌跡")
             st.write(f"📊 目前已在您個人的 Google 試算表中，累積了 **{len(df_child)}** 筆縱向發展觀測事實。")
             
-            # 3. 數據轉譯：把星星轉換成數字 (1, 2, 3) 繪製成長折線圖
             status_map = {"⭐ 正在建立": 1, "⭐⭐ 穩定運用": 2, "⭐⭐⭐ 靈活遷移": 3}
             df_child['能力分數'] = df_child['現有能力評估'].map(status_map).fillna(1)
             
-            # 4. 繪製精準的發展曲線
             fig_line = px.line(
                 df_child, x='日期', y='能力分數', color='對應領域',
                 markers=True, text='現有能力評估',
                 title=f"📈 {selected_child} 的跨領域能力演進圖 (縱向學習歷程)",
                 color_discrete_sequence=['#ffccbc', '#b2dfdb', '#ffe082', '#c5cae9', '#e1bee7', '#ffcdd2']
             )
-            # 優化圖表視覺，將 Y 軸用白話標明能力層次
             fig_line.update_yaxes(tickvals=[1, 2, 3], ticktext=["正在建立", "穩定運用", "靈活遷移"], range=[0.5, 3.5])
             fig_line.update_traces(textposition="top center")
             fig_line.update_layout(hovermode="x unified")
-            
             st.plotly_chart(fig_line, use_container_width=True)
             
-            # 5. 條列展現該幼兒的所有歷史文字檔案
             st.markdown("#### 📜 歷史觀察足跡摘要")
-            st.dataframe(
-                df_child[['日期', '幼兒年齡', '對應領域', '學習指標', '現有能力評估', '親師溝通']], 
-                use_container_width=True, 
-                hide_index=True
-            )
+            st.dataframe(df_child[['日期', '幼兒年齡', '對應領域', '學習指標', '現有能力評估', '親師溝通']], use_container_width=True, hide_index=True)
     else:
         st.info("💡 請先於左側資料庫綁定欄位中貼上您個人的 Google Sheet 網址，系統即可跨雲端動態解鎖『縱向成長看板』功能喔！")
 
