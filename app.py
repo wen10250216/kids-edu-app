@@ -209,4 +209,80 @@ if st.button("🌟 生成專業觀察報告"):
                 【指標解構與尋找指南】：
                 官方課綱是由「領域能力」與「學習面向」交叉形成。
                 請精確識別該活動符合哪一項「課程目標」，並根據幼兒的實齡 {child_age}，從上方的官方課綱課文中「一字不差」地提取出對應的【學習指標編碼與文字】（例如：身-幼-2-1-1 在穩定性及移動性動作中練習平衡）。
-                絕對禁止發明
+                絕對禁止發明、捏造任何課綱中不存在的指標與編碼！
+
+                請依照以下結構輸出，語氣維持簡約療育風：
+
+                ### 🔍 【活動紀錄與行為證據】
+                客觀條列從照片與筆記中觀察到的「動態歷程證據」（如：嘗試堆疊、結構倒塌、自主更換底座、教師提供提示等）。不要在這裡下發展結論。
+
+                ### 📊 【發展領域分析】
+                請依據指南，精確定位並輸出符合的官方指標：
+                - 符合課程目標：[請從 PDF 課文中找出對應的課程目標編碼與完整字句]
+                - 具體對應學習指標：[請從 PDF 課文中精確找出符合幼兒年齡段的學習指標編碼與完整字句]
+
+                ### ✨ 【現有能力評估】
+                請綜合正反證據權重，給出評估結果（嚴禁標註數字或多餘列點）：
+
+                【判定結果】：(請擇一輸出：⭐ 正在建立 / ⭐⭐ 穩定運用 / ⭐⭐⭐ 靈活遷移)
+                
+                【判定信心】：(請依據正反證據的強度，給出 0% - 100% 的估算值)
+                
+                【主要依據】：簡述判定成立的核心觀察。
+                
+                【尚缺證據】：指出若要提高信心分數，還需要觀察到什麼（如：不同情境的遷移、無提示下的獨立完成、長期穩定紀錄等，藉此引導老師下次補充）。
+
+                第二段 (能力說明)：
+                描述孩子如何透過當下的重複練習紮實地累積掌控感，以及這段經驗對於銜接下一個發展階段的重要性。
+
+                ### 🌱 【智慧鷹架引導】
+                基於 Vygotsky 的 ZPD 理論，嚴格使用五個井字號 (#####) 作為次標題，維持視覺層級：
+                
+                ##### ☀️ ZPD 下一步推估
+                預測孩子下一個可以挑戰的具體能力目標。
+                ##### ✨ 啟發性對話
+                提供 1-2 個開放式提問。
+                ##### 📈 探索環境擴充
+                提供 1 個環境或素材的調整建議，以誘發 ZPD 的下一步行為。
+
+                ### 🖍️ 【親師溝通筆記】
+                給家長看的內容 (約150字)，請執行「三步溝通法」：肯定亮點、專業解讀 (白話轉譯且不用生硬術語)、攜手建議。整體保持日系手繪溫馨療育感。
+                """
+                
+                media_contents.append(prompt)
+                for file in uploaded_files:
+                    img = Image.open(file)
+                    media_contents.append(img)
+                
+                response = model.generate_content(media_contents)
+                st.session_state.generated_report = response.text
+                st.session_state.current_child = child_name
+                st.session_state.current_age = child_age
+                
+            except Exception as e:
+                st.error(f"系統發生錯誤，可能是照片過大或系統忙碌中，請稍後再試。錯誤訊息：{e}")
+    else:
+        st.warning("請填寫姓名、年齡並至少上傳一張照片喔！")
+
+# 7. 渲染報告與提供下載按鈕
+if st.session_state.generated_report:
+    st.subheader("📋 專業觀察分析報告")
+    st.markdown(st.session_state.generated_report)
+    st.divider()
+    
+    word_data = build_word_file(
+        st.session_state.current_child,
+        st.session_state.current_age,
+        st.session_state.generated_report,
+        uploaded_files,
+        template_file_upload
+    )
+    
+    st.download_button(
+        label=f"💾 匯出 {st.session_state.current_child} 的 Word 報告",
+        data=word_data,
+        file_name=f"{st.session_state.current_child}_觀察紀錄表.docx",
+        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    )
+
+st.markdown("<br><p style='text-align: center; color: #b0bec5;'>🍃 陪伴孩子在愛與探索中萌芽 🍃</p>", unsafe_allow_html=True)
