@@ -207,8 +207,15 @@ with st.sidebar:
         
         plot_df = pd.DataFrame(list(chart_data.items()), columns=['領域', '觀測次數'])
         fig = px.line_polar(plot_df, r='觀測次數', theta='領域', line_close=True, color_discrete_sequence=['#ffccbc'])
+        
+        # ✨ 完美安全修正：移除所有衝突的進階佈局設定，改用標準無死角的渲染方式 ✨
         fig.update_traces(fill='toself')
-        fig.update_layout(polar=dict(radialaxis=dict(visible=True, side='counter-clockwise')), showlegend=False, margin=dict(l=20, r=20, t=20, b=20), height=200)
+        fig.update_layout(
+            polar=dict(radialaxis=dict(visible=True)),
+            showlegend=False,
+            margin=dict(l=30, r=30, t=30, b=30),
+            height=220
+        )
         st.plotly_chart(fig, use_container_width=True)
         
         blind_spots = [dom for dom, count in chart_data.items() if count < 3]
@@ -223,27 +230,26 @@ st.divider()
 tab_record, tab_chart, tab_roster = st.tabs(["📝 新增動態觀察", "📈 幼兒個人成長看板", "🎒 班級名單管理"])
 
 # ---------------------------------------------------------
-# 分頁三：🎒 班級名單管理 (加入一鍵上傳、下載備份功能)
+# 分頁三：🎒 班級名單管理
 # ---------------------------------------------------------
 with tab_roster:
     st.markdown("### 🎒 班級基本名單設定")
     
-    # ✨ 完美升級：讓老師可以上傳以前存過的名單，免重複打字
-    uploaded_roster_file = st.file_uploader("📂 快速載入以前建好的班級名單 (.csv)", type=["csv"], key="roster_file_uploader", help="初次使用免傳，打完名單後記得在下方下載備份。以後每次打開網頁，先把名單丟進來即可！")
+    uploaded_roster_file = st.file_uploader("📂 快速載入以前建好的班級名單 (.csv)", type=["csv"], key="roster_file_uploader")
     if uploaded_roster_file is not None:
         try:
             roster_df_import = pd.read_csv(uploaded_roster_file)
             required_roster_cols = ['座號', '幼兒姓名', '出生年月日 (例: 2022-05-20)']
             if all(col in roster_df_import.columns for col in required_roster_cols):
                 st.session_state.roster = roster_df_import
-                st.success("🟢 班級名單已智慧恢復！您可以直接去【新增動態觀察】做下拉選單選取了。")
+                st.success("🟢 班級名單已智慧恢復！")
             else:
-                st.error("❌ 上傳的名單格式不符，請確認是從本分頁下載的備份檔。")
+                st.error("❌ 上傳的名單格式不符。")
         except Exception as e:
             st.error(f"名單讀取失敗: {e}")
 
     st.write("---")
-    st.write("📝 **線上編輯名單表格**（初次使用請直接在下方新增打字）：")
+    st.write("📝 **線上編輯名單表格**：")
     edited_roster_df = st.data_editor(
         st.session_state.roster,
         num_rows="dynamic",
@@ -251,7 +257,6 @@ with tab_roster:
         key="roster_table_editor"
     )
     
-    # 雙功能按鈕：左邊更新選單，右邊下載備份
     col_r1, col_r2 = st.columns(2)
     with col_r1:
         if st.button("💾 儲存並更新網頁選單"):
@@ -259,7 +264,6 @@ with tab_roster:
             st.success("🌸 網頁選單已即時連動更新！")
             
     with col_r2:
-        # 導出名單 CSV (注入BOM前綴防微軟Excel打開變亂碼)
         csv_roster_buffer = io.StringIO()
         edited_roster_df.to_csv(csv_roster_buffer, index=False)
         roster_csv_bom = "\ufeff" + csv_roster_buffer.getvalue()
@@ -305,22 +309,17 @@ with tab_record:
 
     uploaded_files = st.file_uploader("🖼️ 1. 上傳觀察照片 (多張連拍歷程)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
-    with st.expander("💡 第一次使用？點我查看【自訂模板標籤】與【本機自動歸檔教學】🌸"):
+   with st.expander("💡 第一次使用自訂模板？點我查看【專屬標籤設定教學】🌸"):
         st.markdown("""
-        為了讓系統完美接軌您個人的行政節奏，請花 1 分鐘參考以下現場實務設定：
-        ### 📋 一... 表格標籤設定
+        為了讓系統完美接軌您學校的行政格式，請在您電腦裡既有的 Word 空白紀錄表中，將需要讓系統代筆的地方，打上對應的「魔法標籤」（請連同大括號一起複製貼上喔！）：
+        
         * 🖍️ **基本資訊**：`{{幼兒姓名}}`、`{{幼兒年齡}}`
         * 📝 **專業分析**：`{{活動紀錄}}`、`{{領域分析}}`、`{{能力評估}}`
         * 🌱 **支持策略**：`{{智慧鷹架}}`
         * 💌 **家長視角**：`{{親師溝通}}`
-        * 🖼️ **動態相片牆**：`{{照片歷程}}`
-        ---
-        ### 📂 二... 自動飛進電腦指定資料夾！
-        1. **建資料夾**：先在您電腦桌面新增一個專屬資料夾（如：`2026學期幼兒觀察紀錄`）。
-        2. **打開設定**：打開 Chrome 瀏覽器 ➜ 點擊右上角「三個點」 ➜ 選擇 **「設定」**。
-        3. **變更路徑**：點選左側的 **「下載」**：
-           * 將「位置」更改為您剛剛在桌面建好的那個資料夾。
-           * 將「下載每個檔案前先詢問儲存位置」**關閉**。
+        * 🖼️ **動態相片牆**：請在表格的空白格子內填入 `{{照片歷程}}`，系統會自動為您防變形整齊排版。
+        
+        > 💡 **老師的彈性自訂小技巧**：如果您學校的表格很精簡，只需要「姓名」和「親師溝通」，您在 Word 裡就**只要貼這兩個標籤就好**！其他沒貼的標籤系統會自動忽略，完全不會寫入 Word，但完整的專業分析依然會在網頁畫面上秀出來給您參考，請放心依據需求彈性設計。
         """)
 
     template_file_upload = st.file_uploader("📄 2. 上傳學校既有 Word 紀錄表模板 (選填，不傳則用系統預設格式)", type=["docx"])
@@ -444,7 +443,7 @@ with tab_chart:
             
             fig_line = px.line(
                 df_child, x='日期', y='能力分數', color='對應領域', markers=True, text='現有能力評估',
-                title=f"📈 {selected_child} 的跨領域能力演進圖 (包含班級座號系統)",
+                title=f"📈 {selected_child} 的跨領域能力演進圖",
                 color_discrete_sequence=['#ffccbc', '#b2dfdb', '#ffe082', '#c5cae9', '#e1bee7', '#ffcdd2']
             )
             fig_line.update_yaxes(tickvals=[1, 2, 3], ticktext=["正在建立", "穩定運用", "靈活遷移"], range=[0.5, 3.5])
