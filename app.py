@@ -207,10 +207,7 @@ with st.sidebar:
         
         plot_df = pd.DataFrame(list(chart_data.items()), columns=['領域', '觀測次數'])
         fig = px.line_polar(plot_df, r='觀測次數', theta='領域', line_close=True, color_discrete_sequence=['#ffccbc'])
-        
-        # ✨ 完美修正 1：將不合法的 fill='adjacent' 改為 Plotly 官方標準的 fill='toself'
         fig.update_traces(fill='toself')
-        
         fig.update_layout(polar=dict(radialaxis=dict(visible=True, side='counter-clockwise')), showlegend=False, margin=dict(l=20, r=20, t=20, b=20), height=200)
         st.plotly_chart(fig, use_container_width=True)
         
@@ -226,12 +223,27 @@ st.divider()
 tab_record, tab_chart, tab_roster = st.tabs(["📝 新增動態觀察", "📈 幼兒個人成長看板", "🎒 班級名單管理"])
 
 # ---------------------------------------------------------
-# 分頁三：🎒 班級名單管理
+# 分頁三：🎒 班級名單管理 (加入一鍵上傳、下載備份功能)
 # ---------------------------------------------------------
 with tab_roster:
     st.markdown("### 🎒 班級基本名單設定")
-    st.write("老師可以在下方直接像 Excel 一樣自由打字建立名單。設定好生日後，寫紀錄時系統就會自動幫您換算精準年齡，不需要死記喔！")
     
+    # ✨ 完美升級：讓老師可以上傳以前存過的名單，免重複打字
+    uploaded_roster_file = st.file_uploader("📂 快速載入以前建好的班級名單 (.csv)", type=["csv"], key="roster_file_uploader", help="初次使用免傳，打完名單後記得在下方下載備份。以後每次打開網頁，先把名單丟進來即可！")
+    if uploaded_roster_file is not None:
+        try:
+            roster_df_import = pd.read_csv(uploaded_roster_file)
+            required_roster_cols = ['座號', '幼兒姓名', '出生年月日 (例: 2022-05-20)']
+            if all(col in roster_df_import.columns for col in required_roster_cols):
+                st.session_state.roster = roster_df_import
+                st.success("🟢 班級名單已智慧恢復！您可以直接去【新增動態觀察】做下拉選單選取了。")
+            else:
+                st.error("❌ 上傳的名單格式不符，請確認是從本分頁下載的備份檔。")
+        except Exception as e:
+            st.error(f"名單讀取失敗: {e}")
+
+    st.write("---")
+    st.write("📝 **線上編輯名單表格**（初次使用請直接在下方新增打字）：")
     edited_roster_df = st.data_editor(
         st.session_state.roster,
         num_rows="dynamic",
@@ -239,9 +251,24 @@ with tab_roster:
         key="roster_table_editor"
     )
     
-    if st.button("💾 儲存並更新班級名單"):
-        st.session_state.roster = edited_roster_df
-        st.success("🌸 班級名單已成功存檔！您現在可以前往【📝 新增動態觀察】直接用下拉選單挑選學生了！")
+    # 雙功能按鈕：左邊更新選單，右邊下載備份
+    col_r1, col_r2 = st.columns(2)
+    with col_r1:
+        if st.button("💾 儲存並更新網頁選單"):
+            st.session_state.roster = edited_roster_df
+            st.success("🌸 網頁選單已即時連動更新！")
+            
+    with col_r2:
+        # 導出名單 CSV (注入BOM前綴防微軟Excel打開變亂碼)
+        csv_roster_buffer = io.StringIO()
+        edited_roster_df.to_csv(csv_roster_buffer, index=False)
+        roster_csv_bom = "\ufeff" + csv_roster_buffer.getvalue()
+        st.download_button(
+            label="📥 下載 / 備份本班級名單 (.csv)",
+            data=roster_csv_bom,
+            file_name="幼兒園班級名單_備份.csv",
+            mime="text/csv"
+        )
 
 # ---------------------------------------------------------
 # 分頁一：📝 新增動態觀察
@@ -304,7 +331,7 @@ with tab_record:
                 try:
                     media_contents = []
                     prompt = f"""
-                    你是一套業界頂級的幼教發展評估可解釋性 AI (XAI) 系統。請基於「證據權重模型」綜合分析上傳的「系列照片 (動態歷程)」與以下資訊：
+                    你是一套業界頂級的幼教發展評估可解释性 AI (XAI) 系統。請基於「證據權重模型」綜合分析上傳的「系列照片 (動態歷程)」與以下資訊：
                     - 幼兒姓名：{final_child_name}
                     - 幼兒實齡：{final_child_age}
                     - 教師補充觀察：{teacher_notes if teacher_notes else "無"}
@@ -325,7 +352,7 @@ with tab_record:
                     - 具體對應學習指標：[學習指標完整字句]
 
                     ### ✨ 【現有能力評估】
-                    【判定結果】：(請擇一輸出：⭐ 正在建立 / ⭐慢 穩定運用 / ⭐⭐⭐ 靈活遷移)
+                    【判定結果】：(請擇一輸出：⭐ 正在建立 / ⭐⭐ 穩定運用 / ⭐⭐⭐ 靈活遷移)
                     【判定信心】：(請給出 0% - 100% 的估算值)
                     【主要依據】：簡述判定成立的核心觀察。
                     【尚缺證據】：指出若要提高信心分數還需要觀察到什麼。
@@ -388,10 +415,9 @@ with tab_record:
             st.download_button(label=f"doc 匯出 {st.session_state.current_child} 的 Word 報告", data=word_data, file_name=f"{st.session_state.current_child}_觀察紀錄表.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
         
         with col_btn2:
-            # ✨ 完美修正 2：在 to_csv 內強制注入微軟專屬防亂碼簽名：encoding='utf-8-sig'
             csv_buffer = io.StringIO()
             st.session_state.session_history.to_csv(csv_buffer, index=False)
-            csv_data_with_bom = "\ufeff" + csv_buffer.getvalue() # 手動確保BOM文字前綴注入
+            csv_data_with_bom = "\ufeff" + csv_buffer.getvalue()
             st.download_button(
                 label="📈 下載包含座號的完整歷史紀錄 (.csv)",
                 data=csv_data_with_bom,
