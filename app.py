@@ -3,16 +3,14 @@ import google.generativeai as genai
 from PIL import Image
 import io
 import os
-import json
+import pandas as pd
 from datetime import datetime
 
-# 載入大數據分析與視覺化套件
+# 載入 Word 與 PDF、視覺化處理套件
 try:
     from docx import Document
     from docx.shared import Inches, Cm
     from pypdf import PdfReader
-    import gspread
-    import pandas as pd
     import plotly.express as px
 except ImportError:
     st.error("❌ 雲端套件正在安裝中，請稍候一分鐘並重新整理網頁。")
@@ -34,11 +32,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 安全讀取 API Key 與 GCP 資料庫授權
+# 2. 安全讀取 Gemini API Key
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 else:
-    st.error("❌ 尚未設定 Gemini API Key")
+    st.error("❌ 尚未在 Streamlit 後台設定 GEMINI_API_KEY")
 
 try:
     available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
@@ -46,15 +44,6 @@ try:
     model = genai.GenerativeModel(target_model)
 except:
     model = genai.GenerativeModel('gemini-1.5-flash')
-
-# 智慧 Google Sheets 授權引擎
-gc = None
-if "gcp_service_account" in st.secrets:
-    try:
-        credentials = dict(st.secrets["gcp_service_account"])
-        gc = gspread.service_account_from_dict(credentials)
-    except Exception as e:
-        st.sidebar.error(f"⚠️ 雲端資料庫授權引擎啟動失敗: {e}")
 
 # 3. 智慧 PDF 課綱快取引擎
 @st.cache_data
@@ -77,6 +66,7 @@ curriculum_raw_text = load_curriculum_from_pdf(pdf_file_path)
 if 'generated_report' not in st.session_state: st.session_state.generated_report = None
 if 'current_child' not in st.session_state: st.session_state.current_child = ""
 if 'current_age' not in st.session_state: st.session_state.current_age = ""
+if 'session_history' not in st.session_state: st.session_state.session_history = pd.DataFrame(columns=['日期', '幼兒姓名', '幼兒年齡', '對應領域', '學習指標', '現有能力評估', '親師溝通'])
 
 # 4. Word 檔案生成函式
 def build_word_file(child_name, child_age, report_text, uploaded_images, template_file=None):
@@ -160,55 +150,49 @@ def build_word_file(child_name, child_age, report_text, uploaded_images, templat
     output_stream.seek(0)
     return output_stream
 
-# 5. 側邊欄：去中心化資料庫與班級大數據診斷
+# 5. 側邊欄：純檔案式大數據歷史載入區（老師絕對學得會！）
 with st.sidebar:
-    st.markdown("### 📊 專屬長期歷程資料庫")
-    st.write("本系統採用『自攜儲存 (BYOS) 隱私保護技術』，數據皆儲存於老師個人的雲端硬碟。")
+    st.markdown("### 📊 班級歷史紀錄檔案袋")
+    st.write("本系統不留存任何幼兒隱私至雲端，所有成長數據皆存在您電腦本機中。")
     
-    user_sheet_url = st.text_input("🔗 請貼上您個人的 Google Sheet 網址", placeholder="https://docs.google.com/spreadsheets/d/...")
+    # 讓老師直接拖放舊的 CSV 紀錄檔進來
+    history_file = st.file_uploader("📂 請上傳您個人的歷史紀錄舊檔案 (.csv)", type=["csv"], help="初次使用免傳，第二次使用時將上次下載的檔案傳上來即可回復所有圖表！")
     
-    # ✨ 超級智慧防呆：如果沒設定 Secrets，這裡會貼心提醒，而不是直接當機紅字！
-    bot_email = "請先至後台 Settings -> Secrets 設定憑證金鑰"
-    if "gcp_service_account" in st.secrets:
-        bot_email = dict(st.secrets["gcp_service_account"]).get("client_email", bot_email)
-
-    with st.expander("🛠️ 如何設定您的專屬開源資料庫？"):
-        st.markdown(f"""
-        1. 在您的雲端硬碟建立一個全新的 Google 試算表。
-        2. 第一列打上欄位：`日期`, `幼兒姓名`, `幼兒年齡`, `對應領域`, `學習指標`, `現有能力評估`, `親師溝通`。
-        3. 點擊右上角「共用」，將本系統官方搬運工加入為**編輯者**：
-        `{bot_email}`
-        4. 複製該試算表網址貼到上方即可解鎖追蹤功能！
-        """)
-    
-    # 智慧盲區大數據看板分析
-    global_df = None
-    if gc and user_sheet_url:
+    # 智慧歷史檔案整合管線
+    if history_file is not None:
         try:
-            sheet = gc.open_by_url(user_sheet_url).sheet1
-            all_records = sheet.get_all_records()
-            if all_records:
-                global_df = pd.DataFrame(all_records)
-                st.markdown("---")
-                st.markdown("### 📊 班級整體觀測平衡診斷")
-                
-                domain_counts = global_df['對應領域'].value_counts().to_dict()
-                all_domains = ["認知領域", "身體動作與健康領域", "語文領域", "社會領域", "情緒領域", "美感領域"]
-                chart_data = {dom: domain_counts.get(dom, 0) for dom in all_domains}
-                
-                plot_df = pd.DataFrame(list(chart_data.items()), columns=['領域', '觀測次數'])
-                fig = px.line_polar(plot_df, r='觀測次數', theta='領域', line_close=True, color_discrete_sequence=['#ffccbc'])
-                fig.update_traces(fill='adjacent')
-                fig.update_layout(polar=dict(radialaxis=dict(visible=True, side='counter-clockwise')), showlegend=False, margin=dict(l=20, r=20, t=20, b=20), height=200)
-                st.plotly_chart(fig, use_container_width=True)
-                
-                blind_spots = [dom for dom, count in chart_data.items() if count < 3]
-                if blind_spots:
-                    st.warning(f"💡 觀測盲區警示：本月對『{', '.join(blind_spots)}』的數據累積較少（不足3次），建議老師近期可多調整觀察視角喔！")
-                else:
-                    st.success("🟢 班級觀測非常均衡，六大領域皆有紮實記錄！")
+            uploaded_df = pd.read_csv(history_file)
+            # 防呆檢查欄位是否符合格式
+            required_cols = ['日期', '幼兒姓名', '幼兒年齡', '對應領域', '學習指標', '現有能力評估', '親師溝通']
+            if all(col in uploaded_df.columns for col in required_cols):
+                st.session_state.session_history = uploaded_df
+                st.sidebar.success("🟢 班級歷史紀錄已智慧同步！")
+            else:
+                st.sidebar.error("❌ 上傳的檔案格式不符，請確認是從本系統下載的檔案。")
         except Exception as e:
-            pass
+            st.sidebar.error(f"檔案讀取失敗: {e}")
+
+    # 智慧盲區動態診斷看板
+    if not st.session_state.session_history.empty:
+        st.markdown("---")
+        st.markdown("### 📊 班級整體觀測平衡診斷")
+        df_history = st.session_state.session_history
+        
+        domain_counts = df_history['對應領域'].value_counts().to_dict()
+        all_domains = ["認知領域", "身體動作與健康領域", "語文領域", "社會領域", "情緒領域", "美感領域"]
+        chart_data = {dom: domain_counts.get(dom, 0) for dom in all_domains}
+        
+        plot_df = pd.DataFrame(list(chart_data.items()), columns=['領域', '觀測次數'])
+        fig = px.line_polar(plot_df, r='觀測次數', theta='領域', line_close=True, color_discrete_sequence=['#ffccbc'])
+        fig.update_traces(fill='adjacent')
+        fig.update_layout(polar=dict(radialaxis=dict(visible=True, side='counter-clockwise')), showlegend=False, margin=dict(l=20, r=20, t=20, b=20), height=200)
+        st.plotly_chart(fig, use_container_width=True)
+        
+        blind_spots = [dom for dom, count in chart_data.items() if count < 3]
+        if blind_spots:
+            st.warning(f"💡 觀測盲區警示：班級在『{', '.join(blind_spots)}』的數據累積較少（不足3次），建議近期可調整觀察視角喔！")
+        else:
+            st.success("🟢 班級觀測非常均衡，六大領域皆有紮實記錄！")
 
 # 6. 主畫面介面呈現 (大標題)
 st.markdown("<h1>🍃 幼兒學習發展分析系統</h1>", unsafe_allow_html=True)
@@ -237,14 +221,18 @@ with tab_record:
     with st.expander("💡 第一次使用？點我查看【自訂模板標籤】與【本機自動歸檔教學】🌸"):
         st.markdown("""
         為了讓系統完美接軌您個人的行政節奏，請花 1 分鐘參考以下現場實務設定：
-        ### 📋 一... 表格標籤設定
+        
+        ### 📋 一、 學校既有 Word 表格標籤設定
         * 🖍️ **基本資訊**：`{{幼兒姓名}}`、`{{幼兒年齡}}`
         * 📝 **專業分析**：`{{活動紀錄}}`、`{{領域分析}}`、`{{能力評估}}`
         * 🌱 **支持策略**：`{{智慧鷹架}}`
         * 💌 **家長視角**：`{{親師溝通}}`
         * 🖼️ **動態相片牆**：`{{照片歷程}}`
+        
+        > 💡 **老師的彈性自訂小技巧**：如果您學校的表格很精簡，只需要「姓名」和「親師溝通」，您在 Word 裡就**只要貼這兩個標籤就好**！其他沒貼的標籤系統會自動忽略，完全不會影響運作。
+        
         ---
-        ### 📂 二... 自動飛進電腦指定資料夾！
+        ### 📂 二、 獨家大絕招：網頁按下一鍵，自動飛進電腦指定資料夾！
         1. **建資料夾**：先在您電腦桌面新增一個專屬資料夾（如：`2026學期幼兒觀察紀錄`）。
         2. **打開設定**：打開 Chrome 瀏覽器 ➜ 點擊右上角「三個點」 ➜ 選擇 **「設定」**。
         3. **變更路徑**：點選左側的 **「下載」**：
@@ -311,25 +299,27 @@ with tab_record:
                     st.session_state.current_child = child_name
                     st.session_state.current_age = child_age
                     
-                    if gc and user_sheet_url:
-                        try:
-                            extracted_domain = "未歸類"
-                            extracted_indicator = "未識別"
-                            if "【核心領域標籤:" in report_text: extracted_domain = report_text.split("【核心領域標籤:")[1].split("】")[0].strip()
-                            if "【核心指標標籤:" in report_text: extracted_indicator = report_text.split("【核心指標標籤:")[1].split("】")[0].strip()
-                            
-                            eval_summary = "⭐ 正在建立"
-                            if "⭐⭐⭐ 靈活遷移" in report_text: eval_summary = "⭐⭐⭐ 靈活遷移"
-                            elif "⭐⭐ 穩定運用" in report_text: eval_summary = "⭐⭐ 穩定運用"
-                            
-                            note_summary = report_text.split('### 🖍️ ')[-1].split('\n', 1)[-1].strip() if '### 🖍️ ' in report_text else "無"
-                            
-                            sheet = gc.open_by_url(user_sheet_url).sheet1
-                            today_str = datetime.now().strftime("%Y-%m-%d")
-                            sheet.append_row([today_str, child_name, child_age, extracted_domain, extracted_indicator, eval_summary, note_summary[:100] + "..."])
-                            st.toast("🚀 長期追蹤數據已成功同步至您的個人雲端試算表！", icon="📈")
-                        except Exception as sheet_err:
-                            st.sidebar.error(f"❌ 寫入資料庫失敗: {sheet_err}")
+                    # 背景自動更新 Session 內部的 DataFrame
+                    extracted_domain = "未歸類"
+                    extracted_indicator = "未識別"
+                    if "【核心領域標籤:" in report_text: extracted_domain = report_text.split("【核心領域標籤:")[1].split("】")[0].strip()
+                    if "【核心指標標籤:" in report_text: extracted_indicator = report_text.split("【核心指標標籤:")[1].split("】")[0].strip()
+                    
+                    eval_summary = "⭐ 正在建立"
+                    if "⭐⭐⭐ 靈活遷移" in report_text: eval_summary = "⭐⭐⭐ 靈活遷移"
+                    elif "⭐⭐ 穩定運用" in report_text: eval_summary = "⭐⭐ 穩定運用"
+                    
+                    note_summary = report_text.split('### 🖍️ ')[-1].split('\n', 1)[-1].strip() if '### 🖍️ ' in report_text else "無"
+                    
+                    today_str = datetime.now().strftime("%Y-%m-%d")
+                    new_row = pd.DataFrame([{
+                        '日期': today_str, '幼兒姓名': child_name, '幼兒年齡': child_age,
+                        '對應領域': extracted_domain, '學習指標': extracted_indicator,
+                        '現有能力評估': eval_summary, '親師溝通': note_summary[:100] + "..."
+                    }])
+                    st.session_state.session_history = pd.concat([st.session_state.session_history, new_row], ignore_index=True)
+                    st.toast("🎉 本次觀察已暫存，請記得在下方下載更新歷史檔案喔！", icon="📝")
+                        
                 except Exception as e:
                     st.error(f"系統發生錯誤，錯誤訊息：{e}")
         else:
@@ -339,23 +329,38 @@ with tab_record:
         st.subheader("📋 專業觀察分析報告")
         st.markdown(st.session_state.generated_report)
         st.divider()
-        word_data = build_word_file(st.session_state.current_child, st.session_state.current_age, st.session_state.generated_report, uploaded_files, template_file_upload)
-        st.download_button(label=f"💾 匯出 {st.session_state.current_child} 的 Word 報告", data=word_data, file_name=f"{st.session_state.current_child}_觀察紀錄表.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            word_data = build_word_file(st.session_state.current_child, st.session_state.current_age, st.session_state.generated_report, uploaded_files, template_file_upload)
+            st.download_button(label=f"doc 匯出 {st.session_state.current_child} 的 Word 報告", data=word_data, file_name=f"{st.session_state.current_child}_觀察紀錄表.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+        
+        with col_btn2:
+            # ✨ 提供老師下載最新融合後 CSV 的功能
+            csv_buffer = io.StringIO()
+            st.session_state.session_history.to_csv(csv_buffer, index=False)
+            st.download_button(
+                label="📈 下載更新後的班級歷史紀錄 (.csv)",
+                data=csv_buffer.getvalue(),
+                file_name=f"班級學習歷程紀錄表_{datetime.now().strftime('%m%d')}.csv",
+                mime="text/csv"
+            )
 
 # ---------------------------------------------------------
-# 分頁二：智慧讀取與幼兒個人成長圖表分析
+# 分頁二：智慧讀取與幼兒個人成長圖表分析 (從快取 DataFrame 讀取)
 # ---------------------------------------------------------
 with tab_chart:
     st.markdown("### 📈 幼兒長期發展成長圖表")
     
-    if global_df is not None:
-        unique_children = global_df['幼兒姓名'].unique().tolist()
+    if not st.session_state.session_history.empty:
+        df_history = st.session_state.session_history
+        unique_children = df_history['幼兒姓名'].unique().tolist()
         selected_child = st.selectbox("🖍️ 請選擇要調閱成長圖表的幼兒姓名：", unique_children)
         
         if selected_child:
-            df_child = global_df[global_df['幼兒姓名'] == selected_child].sort_values(by='日期')
+            df_child = df_history[df_history['幼兒姓名'] == selected_child].sort_values(by='日期')
             st.markdown(f"#### 🍃 {selected_child} 的縱向能力發展軌跡")
-            st.write(f"📊 目前已在您個人的 Google 試算表中，累積了 **{len(df_child)}** 筆縱向發展觀測事實。")
+            st.write(f"📊 目前已在檔案袋中，累積了 **{len(df_child)}** 筆縱向發展觀測事實。")
             
             status_map = {"⭐ 正在建立": 1, "⭐⭐ 穩定運用": 2, "⭐⭐⭐ 靈活遷移": 3}
             df_child['能力分數'] = df_child['現有能力評估'].map(status_map).fillna(1)
@@ -374,6 +379,6 @@ with tab_chart:
             st.markdown("#### 📜 歷史觀察足跡摘要")
             st.dataframe(df_child[['日期', '幼兒年齡', '對應領域', '學習指標', '現有能力評估', '親師溝通']], use_container_width=True, hide_index=True)
     else:
-        st.info("💡 請先於左側資料庫綁定欄位中貼上您個人的 Google Sheet 網址，系統即可跨雲端動態解鎖『縱向成長看板』功能喔！")
+        st.info("💡 目前歷史資料庫為空。請先於左側上傳您的 `.csv` 歷史紀錄檔案，或是直接在隔壁分頁新增觀察，系統即可即時幫您解鎖『縱向成長看板』功能喔！")
 
 st.markdown("<br><p style='text-align: center; color: #b0bec5;'>🍃 陪伴孩子在愛與探索中萌芽 🍃</p>", unsafe_allow_html=True)
