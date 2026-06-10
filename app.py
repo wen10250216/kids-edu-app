@@ -62,11 +62,42 @@ def load_curriculum_from_pdf(pdf_path):
 pdf_file_path = os.path.join("data", "curriculum.pdf")
 curriculum_raw_text = load_curriculum_from_pdf(pdf_file_path)
 
-# 初始化 Session State
+# ✨ 🤖 核心演算法：輸入生日，自動換算成「X歲Y個月」
+def calculate_age_from_dob(dob_val):
+    try:
+        if pd.isna(dob_val) or not str(dob_val).strip(): return ""
+        dob_str = str(dob_val).replace('/', '-').strip()
+        # 嘗試解析常見的日期格式
+        for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S"):
+            try:
+                dob = datetime.strptime(dob_str.split()[0], fmt)
+                break
+            except: continue
+        else:
+            return "格式錯誤(請用YYYY-MM-DD)"
+            
+        today = datetime.now()
+        years = today.year - dob.year
+        months = today.month - dob.month
+        if today.day < dob.day:
+            months -= 1
+        if months < 0:
+            years -= 1
+            months += 12
+        return f"{years}歲{months}個月"
+    except:
+        return "計算失敗"
+
+# 初始化 Session State 保險箱
 if 'generated_report' not in st.session_state: st.session_state.generated_report = None
 if 'current_child' not in st.session_state: st.session_state.current_child = ""
 if 'current_age' not in st.session_state: st.session_state.current_age = ""
-if 'session_history' not in st.session_state: st.session_state.session_history = pd.DataFrame(columns=['日期', '幼兒姓名', '幼兒年齡', '對應領域', '學習指標', '現有能力評估', '親師溝通'])
+# 班級名單初始欄位
+if 'roster' not in st.session_state: 
+    st.session_state.roster = pd.DataFrame(columns=['座號', '幼兒姓名', '出生年月日 (例: 2022-05-20)'])
+# 歷史紀錄表初始欄位 (加入座號)
+if 'session_history' not in st.session_state: 
+    st.session_state.session_history = pd.DataFrame(columns=['日期', '座號', '幼兒姓名', '幼兒年齡', '對應領域', '學習指標', '現有能力評估', '親師溝通'])
 
 # 4. Word 檔案生成函式
 def build_word_file(child_name, child_age, report_text, uploaded_images, template_file=None):
@@ -150,34 +181,29 @@ def build_word_file(child_name, child_age, report_text, uploaded_images, templat
     output_stream.seek(0)
     return output_stream
 
-# 5. 側邊欄：純檔案式大數據歷史載入區（老師絕對學得會！）
+# 5. 側邊欄：純檔案式大數據歷史載入區
 with st.sidebar:
     st.markdown("### 📊 班級歷史紀錄檔案袋")
-    st.write("本系統不留存任何幼兒隱私至雲端，所有成長數據皆存在您電腦本機中。")
+    st.write("數據皆存在您電腦本機中，系統不會留存任何隱私。")
     
-    # 讓老師直接拖放舊的 CSV 紀錄檔進來
-    history_file = st.file_uploader("📂 請上傳您個人的歷史紀錄舊檔案 (.csv)", type=["csv"], help="初次使用免傳，第二次使用時將上次下載的檔案傳上來即可回復所有圖表！")
+    history_file = st.file_uploader("📂 請上傳您個人的歷史紀錄舊檔案 (.csv)", type=["csv"], key="hist_upload")
     
-    # 智慧歷史檔案整合管線
     if history_file is not None:
         try:
             uploaded_df = pd.read_csv(history_file)
-            # 防呆檢查欄位是否符合格式
-            required_cols = ['日期', '幼兒姓名', '幼兒年齡', '對應領域', '學習指標', '現有能力評估', '親師溝通']
+            required_cols = ['日期', '座號', '幼兒姓名', '幼兒年齡', '對應領域', '學習指標', '現有能力評估', '親師溝通']
             if all(col in uploaded_df.columns for col in required_cols):
                 st.session_state.session_history = uploaded_df
                 st.sidebar.success("🟢 班級歷史紀錄已智慧同步！")
             else:
-                st.sidebar.error("❌ 上傳的檔案格式不符，請確認是從本系統下載的檔案。")
+                st.sidebar.error("❌ 檔案欄位格式不符，請確認是從本系統下載的歷史檔。")
         except Exception as e:
             st.sidebar.error(f"檔案讀取失敗: {e}")
 
-    # 智慧盲區動態診斷看板
     if not st.session_state.session_history.empty:
         st.markdown("---")
         st.markdown("### 📊 班級整體觀測平衡診斷")
         df_history = st.session_state.session_history
-        
         domain_counts = df_history['對應領域'].value_counts().to_dict()
         all_domains = ["認知領域", "身體動作與健康領域", "語文領域", "社會領域", "情緒領域", "美感領域"]
         chart_data = {dom: domain_counts.get(dom, 0) for dom in all_domains}
@@ -189,30 +215,72 @@ with st.sidebar:
         st.plotly_chart(fig, use_container_width=True)
         
         blind_spots = [dom for dom, count in chart_data.items() if count < 3]
-        if blind_spots:
-            st.warning(f"💡 觀測盲區警示：班級在『{', '.join(blind_spots)}』的數據累積較少（不足3次），建議近期可調整觀察視角喔！")
-        else:
-            st.success("🟢 班級觀測非常均衡，六大領域皆有紮實記錄！")
+        if blind_spots: st.warning(f"💡 觀測盲區警示：班級在『{', '.join(blind_spots)}』數據較少喔！")
+        else: st.success("🟢 班級觀測非常均衡！")
 
 # 6. 主畫面介面呈現 (大標題)
 st.markdown("<h1>🍃 幼兒學習發展分析系統</h1>", unsafe_allow_html=True)
 st.divider()
 
-# 雙分頁系統
-tab_record, tab_chart = st.tabs(["📝 新增動態觀察", "📈 幼兒個人成長看板"])
+# ✨ 升級為三連發分頁，加入名單管理功能 ✨
+tab_record, tab_chart, tab_roster = st.tabs(["📝 新增動態觀察", "📈 幼兒個人成長看板", "🎒 班級名單管理"])
 
 # ---------------------------------------------------------
-# 分頁一：新增與生成紀錄表
+# 分頁三：🎒 班級名單管理 (優先說明新架構)
+# ---------------------------------------------------------
+with tab_roster:
+    st.markdown("### 🎒 班級基本名單設定")
+    st.write("老師可以在下方直接像 Excel 一樣自由打字建立名單。設定好生日後，寫紀錄時系統就會自動幫您換算精準年齡，不需要死記喔！")
+    
+    # 利用內建的資料編輯器，讓老師直接打字或修改
+    name_column_key = '出生年月日 (例: 2022-05-20)'
+    edited_roster_df = st.data_editor(
+        st.session_state.roster,
+        num_rows="dynamic", # 允許自由新增或刪除行
+        use_container_width=True,
+        key="roster_table_editor"
+    )
+    
+    if st.button("💾 儲存並更新班級名單"):
+        st.session_state.roster = edited_roster_df
+        st.success("🌸 班級名單已成功存檔！您現在可以前往【📝 新增動態觀察】直接用下拉選單挑選學生了！")
+
+# ---------------------------------------------------------
+# 分頁一：📝 新增動態觀察
 # ---------------------------------------------------------
 with tab_record:
-    if os.path.exists(pdf_file_path):
-        st.caption("🟢 系統狀態：後台官方課綱 PDF 檔案已智慧載入，全面啟動防幻覺精準對照。")
-    else:
-        st.caption("🟡 系統狀態：未偵測到 data/curriculum.pdf，將切換為 AI 常規跨領域推論模式。")
+    if os.path.exists(pdf_file_path): st.caption("🟢 系統狀態：後台官方課綱 PDF 檔案已智慧載入。")
+    else: st.caption("🟡 系統狀態：未偵測到後台 PDF，切換為 AI 常規跨領域推論模式。")
 
-    col_name, col_age = st.columns(2)
-    with col_name: child_name = st.text_input("🖍️ 幼兒姓名 / 暱稱", placeholder="例如：雅雅")
-    with col_age: child_age = st.text_input("☀️ 幼兒年齡 (請精確輸入)", placeholder="例如：2歲5個月 或 6歲0個月")
+    # ✨ 智慧連動選單設計：可以選單選，也可以手動打
+    roster_df = st.session_state.roster
+    roster_names = roster_df['幼兒姓名'].dropna().tolist() if not roster_df.empty else []
+    selectbox_options = ["請選擇班級幼兒... (或手動輸入)"] + roster_names + ["➕ 手動輸入新幼兒 (不在名單內)"]
+    
+    selected_name_option = st.selectbox("🖍️ 選擇幼兒姓名", options=selectbox_options)
+    
+    # 依據老師的選擇，動態決定年齡與姓名的管線
+    final_child_name = ""
+    final_child_age = ""
+    final_seat_num = "無"
+    
+    if selected_name_option == "請選擇班級幼兒... (或手動輸入)":
+        st.caption("ℹ️ 請選擇上方的名單，或是下拉到最底下選擇手動輸入。")
+    elif selected_name_option == "➕ 手動輸入新幼兒 (不在名單內)":
+        col_manual_name, col_manual_age = st.columns(2)
+        with col_manual_name: final_child_name = st.text_input("📝 請輸入全新幼兒姓名", placeholder="例如：強強")
+        with col_manual_age: final_child_age = st.text_input("☀️ 請輸入年齡", placeholder="例如：4歲2個月")
+    else:
+        # 老師選了名單內的孩子
+        final_child_name = selected_name_option
+        # 從後台表格自動抓取該孩子的座號與生日
+        student_row = roster_df[roster_df['幼兒姓名'] == final_child_name].iloc[0]
+        final_seat_num = str(student_row['座號'])
+        dob_birthday = student_row['出生年月日 (例: 2022-05-20)']
+        
+        # 自動換算年齡
+        final_child_age = calculate_age_from_dob(dob_birthday)
+        st.info(f"✨ 班級名單連動成功！【座號：{final_seat_num} 號】 ➜ 系統自動精算當前實齡：**{final_child_age}**")
 
     teacher_notes = st.text_area("🖊️ 老師補充觀察 (為提升 AI 判定信心，建議補充以下資訊)", placeholder="1. 頻率：這是第一次發生、偶爾出現、還是穩定表現？\n2. 歷程：過程中是否失敗過？是否模仿同儕？\n3. 介入：老師有給予提示或動手幫忙嗎？\n4. 幼兒說的話：", key="input_notes")
 
@@ -221,16 +289,12 @@ with tab_record:
     with st.expander("💡 第一次使用？點我查看【自訂模板標籤】與【本機自動歸檔教學】🌸"):
         st.markdown("""
         為了讓系統完美接軌您個人的行政節奏，請花 1 分鐘參考以下現場實務設定：
-        
         ### 📋 一、 學校既有 Word 表格標籤設定
         * 🖍️ **基本資訊**：`{{幼兒姓名}}`、`{{幼兒年齡}}`
         * 📝 **專業分析**：`{{活動紀錄}}`、`{{領域分析}}`、`{{能力評估}}`
         * 🌱 **支持策略**：`{{智慧鷹架}}`
         * 💌 **家長視角**：`{{親師溝通}}`
         * 🖼️ **動態相片牆**：`{{照片歷程}}`
-        
-        > 💡 **老師的彈性自訂小技巧**：如果您學校的表格很精簡，只需要「姓名」和「親師溝通」，您在 Word 裡就**只要貼這兩個標籤就好**！其他沒貼的標籤系統會自動忽略，完全不會影響運作。
-        
         ---
         ### 📂 二、 獨家大絕招：網頁按下一鍵，自動飛進電腦指定資料夾！
         1. **建資料夾**：先在您電腦桌面新增一個專屬資料夾（如：`2026學期幼兒觀察紀錄`）。
@@ -243,22 +307,19 @@ with tab_record:
     template_file_upload = st.file_uploader("📄 2. 上傳學校既有 Word 紀錄表模板 (選填，不傳則用系統預設格式)", type=["docx"])
 
     if st.button("🌟 生成專業觀察報告"):
-        if uploaded_files and child_age and child_name:
+        if uploaded_files and final_child_age and final_child_name:
             with st.spinner(f"正在透過證據權重模型與官方課綱 PDF 進行深度運算..."):
                 try:
                     media_contents = []
                     prompt = f"""
                     你是一套業界頂級的幼教發展評估可解釋性 AI (XAI) 系統。請基於「證據權重模型」綜合分析上傳的「系列照片 (動態歷程)」與以下資訊：
-                    - 幼兒姓名：{child_name}
-                    - 幼兒實齡：{child_age}
+                    - 幼兒姓名：{final_child_name}
+                    - 幼兒實齡：{final_child_age}
                     - 教師補充觀察：{teacher_notes if teacher_notes else "無"}
 
                     ⚠️ 【最高指導原則：教育部官方課綱絕對精確對照與核心欄位精準輸出】
                     系統後台已為你讀取了完整的教育部官方《幼兒園教保活動課程大綱》PDF 文本內容如下：
                     {curriculum_raw_text[:60000]} 
-
-                    請嚴格依據幼兒的實齡 {child_age} 一字不差地提取指標。
-                    請嚴格遵守在特定區塊標註【核心領域標籤: 領域名稱】與【核心指標標籤: 指標名稱】。
 
                     請依照以下結構輸出，語氣維持簡約療育風：
 
@@ -296,10 +357,10 @@ with tab_record:
                     response = model.generate_content(media_contents)
                     report_text = response.text
                     st.session_state.generated_report = report_text
-                    st.session_state.current_child = child_name
-                    st.session_state.current_age = child_age
+                    st.session_state.current_child = final_child_name
+                    st.session_state.current_age = final_child_age
                     
-                    # 背景自動更新 Session 內部的 DataFrame
+                    # 智慧整合：將資料自動壓入歷史紀錄，並自帶座號欄位
                     extracted_domain = "未歸類"
                     extracted_indicator = "未識別"
                     if "【核心領域標籤:" in report_text: extracted_domain = report_text.split("【核心領域標籤:")[1].split("】")[0].strip()
@@ -313,17 +374,17 @@ with tab_record:
                     
                     today_str = datetime.now().strftime("%Y-%m-%d")
                     new_row = pd.DataFrame([{
-                        '日期': today_str, '幼兒姓名': child_name, '幼兒年齡': child_age,
+                        '日期': today_str, '座號': final_seat_num, '幼兒姓名': final_child_name, '幼兒年齡': final_child_age,
                         '對應領域': extracted_domain, '學習指標': extracted_indicator,
                         '現有能力評估': eval_summary, '親師溝通': note_summary[:100] + "..."
                     }])
                     st.session_state.session_history = pd.concat([st.session_state.session_history, new_row], ignore_index=True)
-                    st.toast("🎉 本次觀察已暫存，請記得在下方下載更新歷史檔案喔！", icon="📝")
+                    st.toast("🎉 本次觀察已與名單智慧整合，請記得在下方下載更新歷史檔案喔！", icon="📝")
                         
                 except Exception as e:
                     st.error(f"系統發生錯誤，錯誤訊息：{e}")
         else:
-            st.warning("請填寫姓名、年齡並至少上傳一張照片喔！")
+            st.warning("請選取或輸入幼兒姓名、年齡並至少上傳一張照片喔！")
 
     if st.session_state.generated_report:
         st.subheader("📋 專業觀察分析報告")
@@ -336,22 +397,20 @@ with tab_record:
             st.download_button(label=f"doc 匯出 {st.session_state.current_child} 的 Word 報告", data=word_data, file_name=f"{st.session_state.current_child}_觀察紀錄表.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
         
         with col_btn2:
-            # ✨ 提供老師下載最新融合後 CSV 的功能
             csv_buffer = io.StringIO()
             st.session_state.session_history.to_csv(csv_buffer, index=False)
             st.download_button(
-                label="📈 下載更新後的班級歷史紀錄 (.csv)",
+                label="📈 下載包含座號的完整歷史紀錄 (.csv)",
                 data=csv_buffer.getvalue(),
-                file_name=f"班級學習歷程紀錄表_{datetime.now().strftime('%m%d')}.csv",
+                file_name=f"班級整合學習歷程_{datetime.now().strftime('%m%d')}.csv",
                 mime="text/csv"
             )
 
 # ---------------------------------------------------------
-# 分頁二：智慧讀取與幼兒個人成長圖表分析 (從快取 DataFrame 讀取)
+# 分頁二：📈 幼兒個人成長看板 (完全相容新架構)
 # ---------------------------------------------------------
 with tab_chart:
     st.markdown("### 📈 幼兒長期發展成長圖表")
-    
     if not st.session_state.session_history.empty:
         df_history = st.session_state.session_history
         unique_children = df_history['幼兒姓名'].unique().tolist()
@@ -360,25 +419,22 @@ with tab_chart:
         if selected_child:
             df_child = df_history[df_history['幼兒姓名'] == selected_child].sort_values(by='日期')
             st.markdown(f"#### 🍃 {selected_child} 的縱向能力發展軌跡")
-            st.write(f"📊 目前已在檔案袋中，累積了 **{len(df_child)}** 筆縱向發展觀測事實。")
             
             status_map = {"⭐ 正在建立": 1, "⭐⭐ 穩定運用": 2, "⭐⭐⭐ 靈活遷移": 3}
             df_child['能力分數'] = df_child['現有能力評估'].map(status_map).fillna(1)
             
             fig_line = px.line(
-                df_child, x='日期', y='能力分數', color='對應領域',
-                markers=True, text='現有能力評估',
-                title=f"📈 {selected_child} 的跨領域能力演進圖 (縱向學習歷程)",
+                df_child, x='日期', y='能力分數', color='對應領域', markers=True, text='現有能力評估',
+                title=f"📈 {selected_child} 的跨領域能力演進圖 (包含班級座號系統)",
                 color_discrete_sequence=['#ffccbc', '#b2dfdb', '#ffe082', '#c5cae9', '#e1bee7', '#ffcdd2']
             )
             fig_line.update_yaxes(tickvals=[1, 2, 3], ticktext=["正在建立", "穩定運用", "靈活遷移"], range=[0.5, 3.5])
             fig_line.update_traces(textposition="top center")
-            fig_line.update_layout(hovermode="x unified")
             st.plotly_chart(fig_line, use_container_width=True)
             
             st.markdown("#### 📜 歷史觀察足跡摘要")
-            st.dataframe(df_child[['日期', '幼兒年齡', '對應領域', '學習指標', '現有能力評估', '親師溝通']], use_container_width=True, hide_index=True)
+            st.dataframe(df_child[['日期', '座號', '幼兒姓名', '幼兒年齡', '對應領域', '學習指標', '現有能力評估', '親師溝通']], use_container_width=True, hide_index=True)
     else:
-        st.info("💡 目前歷史資料庫為空。請先於左側上傳您的 `.csv` 歷史紀錄檔案，或是直接在隔壁分頁新增觀察，系統即可即時幫您解鎖『縱向成長看板』功能喔！")
+        st.info("💡 目前歷史資料庫為空。請先在左側上傳歷史紀錄，或開始新增動態觀察吧！")
 
 st.markdown("<br><p style='text-align: center; color: #b0bec5;'>🍃 陪伴孩子在愛與探索中萌芽 🍃</p>", unsafe_allow_html=True)
