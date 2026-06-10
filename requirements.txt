@@ -3,3 +3,6 @@ google-generativeai
 Pillow
 python-docx
 pypdf
+gspread
+pandas
+plotly
