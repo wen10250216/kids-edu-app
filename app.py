@@ -6,7 +6,7 @@ import os
 import pandas as pd
 from datetime import datetime
 
-# 1. 網頁風格設定 (🌟 必須是絕對第一句 Streamlit 指令，搬到最上方徹底根除 Oh no 當機)
+# 1. 網頁風格設定 (必須是絕對第一句 Streamlit 指令，徹底防範 Oh no 當機)
 st.set_page_config(page_title="幼兒學習發展分析系統", page_icon="🍃", layout="centered")
 
 # 2. 隨後才進行雲端套件的安全載入檢測
@@ -479,7 +479,6 @@ with tab_chart:
             st.plotly_chart(fig_line, use_container_width=True, config={'displayModeBar': False})
             
             st.markdown("#### 📜 歷史觀察足跡摘要")
-            # ✨ 欄位智慧過濾管線：精準動態抓取歷史欄位，防範任何名稱未定義衝突
             show_cols = ['日期', '座號', '幼兒姓名', '幼兒年齡', '觀察類型', '對應領域', '完整指標鏈', '現有能力評估', '親師溝通']
             available_cols = [col for col in show_cols if col in df_child.columns]
             st.dataframe(df_child[available_cols], use_container_width=True, hide_index=True)
