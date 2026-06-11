@@ -222,7 +222,8 @@ with st.sidebar:
         context_data = {ctx: context_counts.get(ctx, 0) for ctx in all_contexts}
         context_df = pd.DataFrame(list(context_data.items()), columns=['情境', '次數'])
         fig_bar = px.bar(context_df, x='次數', y='情境', orientation='h', color_discrete_sequence=['#b2dfdb'])
-        fig_bar.update_layout(margin=dict(l=10, r=10, t=35, b=10), height=220, yaxis={'categoryorder':'total ascending'})
+        fig_bar.update_layout(margin=dict(l=10, r=10, t=35, b=10), height=220)
+        fig_bar.update_yaxes(categoryorder='total ascending') # 頂級版本相容性安全調整
         st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
 
 # 7. 主畫面介面呈現 (大標題)
@@ -438,7 +439,7 @@ with tab_record:
         
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
-            word_data = build_word_file(st.session_state.current_child, st.session_state.current_age, st.session_state.generated_report, uploaded_files, template_file_upload)
+            word_data = build_word_file(st.session_state.current_child, st.session_state.current_age, st.session_state.generated_report, uploaded_images, template_file_upload)
             st.download_button(label=f"doc 匯出 {st.session_state.current_child} 的 Word 報告", data=word_data, file_name=f"{st.session_state.current_child}_觀察紀錄表.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
         
         with col_btn2:
