@@ -222,8 +222,7 @@ with st.sidebar:
         context_data = {ctx: context_counts.get(ctx, 0) for ctx in all_contexts}
         context_df = pd.DataFrame(list(context_data.items()), columns=['情境', '次數'])
         fig_bar = px.bar(context_df, x='次數', y='情境', orientation='h', color_discrete_sequence=['#b2dfdb'])
-        fig_bar.update_layout(margin=dict(l=10, r=10, t=35, b=10), height=220)
-        fig_bar.update_yaxes(categoryorder='total ascending') # 頂級版本相容性安全調整
+        fig_bar.update_layout(margin=dict(l=10, r=10, t=35, b=10), height=220, yaxis={'categoryorder':'total ascending'})
         st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
 
 # 7. 主畫面介面呈現 (大標題)
@@ -321,6 +320,7 @@ with tab_record:
 
     teacher_notes = st.text_area("🖊️ 老師補充觀察 (為提升 AI 判定信心，建議補充以下資訊)", placeholder="1. 頻率：這是第一次發生、偶爾出現、還是穩定表現？\n2. 歷程：過程中是否失敗過？是否模仿同儕？\n3. 介入：老師有給予提示或動手幫忙嗎？\n4. 幼兒說的話：", key="input_notes")
 
+    # 🌟 變數一致化：維持複數變數名稱，徹底防止 NameError
     uploaded_files = st.file_uploader("🖼️ 1. 上傳觀察照片 (多張連拍歷程)", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
     with st.expander("💡 第一次使用自訂模板？點我查看【專屬標籤設定教學】🌸"):
@@ -416,7 +416,7 @@ with tab_record:
                     
                     custom_date_str = obs_date.strftime("%Y-%m-%d")
                     new_row = pd.DataFrame([{
-                        '日期': custom_date_str, '座號': final_seat_num, '幼兒姓名': final_child_name, '幼兒年齡': final_child_age,
+                        '日期': custom_date_str, '座號': final_seat_num, '幼易姓名': final_child_name, '幼兒年齡': final_child_age,
                         '觀察類型': obs_type, '對應領域': extracted_domain, '主要指標': extracted_indicator, '完整指標鏈': extracted_chain,
                         '現有能力評估': eval_summary, '親師溝通': note_summary[:100] + "..."
                     }])
@@ -439,7 +439,8 @@ with tab_record:
         
         col_btn1, col_btn2 = st.columns(2)
         with col_btn1:
-            word_data = build_word_file(st.session_state.current_child, st.session_state.current_age, st.session_state.generated_report, uploaded_images, template_file_upload)
+            # 🌟 核心修復點：將這裡的參數名稱與上方完完全全對齊為 uploaded_files，根除 NameError！
+            word_data = build_word_file(st.session_state.current_child, st.session_state.current_age, st.session_state.generated_report, uploaded_files, template_file_upload)
             st.download_button(label=f"doc 匯出 {st.session_state.current_child} 的 Word 報告", data=word_data, file_name=f"{st.session_state.current_child}_觀察紀錄表.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
         
         with col_btn2:
