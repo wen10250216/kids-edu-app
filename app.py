@@ -13,7 +13,7 @@ try:
     from pypdf import PdfReader
     import plotly.express as px
 except ImportError:
-    st.error("❌ 雲端套件正在安裝中，請稍候一分鐘並重新整理網頁。")
+    st.error("⚠️ 系統繁忙，請稍後")
 
 # 1. 網頁風格設定 (日系療育風、馬卡龍色系)
 st.set_page_config(page_title="幼兒學習發展分析系統", page_icon="🍃", layout="centered")
@@ -93,8 +93,6 @@ if 'current_child' not in st.session_state: st.session_state.current_child = ""
 if 'current_age' not in st.session_state: st.session_state.current_age = ""
 if 'roster' not in st.session_state: 
     st.session_state.roster = pd.DataFrame(columns=['座號', '幼兒姓名', '出生年月日 (例: 2022-05-20)'])
-
-# ✨ 欄位完美升級：正式加入「完整指標鏈」儲存管線，支持同一次觀察有多重指標
 if 'session_history' not in st.session_state: 
     st.session_state.session_history = pd.DataFrame(columns=['日期', '座號', '幼兒姓名', '幼兒年齡', '觀察類型', '對應領域', '主要指標', '完整指標鏈', '現有能力評估', '親師溝通'])
 
@@ -106,7 +104,7 @@ def build_word_file(child_name, child_age, report_text, uploaded_images, templat
         if '活動紀錄' in sec: report_data["活動紀錄"] = sec.split('\n', 1)[-1].strip().replace('**', '')
         elif '發展領域分析' in sec: report_data["領域分析"] = sec.split('\n', 1)[-1].strip().replace('**', '')
         elif '現有能力評估' in sec: report_data["能力評估"] = sec.split('\n', 1)[-1].strip().replace('**', '')
-        elif '智慧鷹架引導' in sec: report_data["智慧鷹架"] = sec.split('\n', 1)[-1].strip().replace('**', '')
+        elif '智慧鷹架引難' in sec or '智慧鷹架引導' in sec: report_data["智慧鷹架"] = sec.split('\n', 1)[-1].strip().replace('**', '')
         elif '親師溝通筆記' in sec: report_data["親師溝通"] = sec.split('\n', 1)[-1].strip().replace('**', '')
 
     if template_file is not None:
@@ -190,17 +188,13 @@ with st.sidebar:
     if history_file is not None:
         try:
             uploaded_df = pd.read_csv(history_file)
-            
-            # 智慧老舊版本欄位自動相容補全
             if '觀察類型' not in uploaded_df.columns: uploaded_df['觀察類型'] = "學習區活動"
             if '主要指標' not in uploaded_df.columns and '學習指標' in uploaded_df.columns:
                 uploaded_df['主要指標'] = uploaded_df['學習指標']
             if '完整指標鏈' not in uploaded_df.columns: uploaded_df['完整指標鏈'] = uploaded_df['主要指標']
             
             required_cols = ['日期', '座號', '幼兒姓名', '幼兒年齡', '觀察類型', '對應領域', '主要指標', '完整指標鏈', '現有能力評估', '親師溝通']
-            # 濾除老舊的多餘欄位，維持乾淨結構
             uploaded_df = uploaded_df[required_cols]
-            
             st.session_state.session_history = uploaded_df
             st.sidebar.success("🟢 班級歷史紀錄已智慧同步！")
         except Exception as e:
@@ -210,7 +204,6 @@ with st.sidebar:
     if not st.session_state.session_history.empty:
         df_history = st.session_state.session_history
         
-        # 面向一：六大領域平衡 (雷達圖 - 能力深度)
         st.markdown("---")
         st.markdown("### 📊 核心能力發展診斷 (六大領域)")
         domain_counts = df_history['對應領域'].value_counts().to_dict()
@@ -220,17 +213,19 @@ with st.sidebar:
         fig_radar = px.line_polar(plot_df, r='觀測次數', theta='領域', line_close=True, color_discrete_sequence=['#ffccbc'])
         fig_radar.update_traces(fill='toself')
         fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True)), showlegend=False, margin=dict(l=30, r=30, t=30, b=30), height=200)
-        st.plotly_chart(fig_radar, use_container_width=True)
+        # ✨ 完美隱藏工具列 1
+        st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
         
-        # 面向二：教學情境投放診斷 (水平長條圖 - 環境作息)
         st.markdown("### 📂 教學情境分佈診斷 (觀察類型)")
         context_counts = df_history['觀察類型'].value_counts().to_dict()
         all_contexts = ["學習區活動", "自由遊戲", "戶外活動", "團體活動", "生活自理"]
         context_data = {ctx: context_counts.get(ctx, 0) for ctx in all_contexts}
         context_df = pd.DataFrame(list(context_data.items()), columns=['情境', '次數'])
         fig_bar = px.bar(context_df, x='次數', y='情境', orientation='h', color_discrete_sequence=['#b2dfdb'])
-        fig_bar.update_layout(margin=dict(l=10, r=10, t=10, b=10), height=180, yaxis={'categoryorder':'total ascending'})
-        st.plotly_chart(fig_bar, use_container_width=True)
+        # ✨ 完美加高呼吸空間
+        fig_bar.update_layout(margin=dict(l=10, r=10, t=35, b=10), height=220, yaxis={'categoryorder':'total ascending'})
+        # ✨ 完美隱藏工具列 2：徹底消滅長條圖上疊加的放大鏡圖標
+        st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
 
 # 6. 主畫面介面呈現 (大標題)
 st.markdown("<h1>🍃 幼兒學習發展分析系統</h1>", unsafe_allow_html=True)
@@ -310,11 +305,20 @@ with tab_record:
         st.info(f"✨ 班級名單連動成功！【座號：{final_seat_num} 號】 ➜ 系統自動精算當前實齡：**{final_child_age}**")
 
     st.write("---")
-    obs_type = st.selectbox(
-        "🎯 選擇本次觀察類型 / 情境情境",
-        ["學習區活動", "自由遊戲", "戶外活動", "團體活動", "生活自理"],
-        help="選擇此紀錄發生的情境，系統將自動同步到左側的『環境投放診斷看板』中喔！"
-    )
+    
+    col_obs_type, col_obs_date = st.columns(2)
+    with col_obs_type:
+        obs_type = st.selectbox(
+            "🎯 選擇本次觀察類型 / 教學情境",
+            ["學習區活動", "自由遊戲", "戶外活動", "團體活動", "生活自理"],
+            help="選擇此紀錄發生的情境。"
+        )
+    with col_obs_date:
+        obs_date = st.date_input(
+            "📅 選擇實際觀察日期",
+            value=datetime.now(),
+            help="補做紀錄時，請在此補上照片實際拍攝、發生的那一天喔！"
+        )
 
     teacher_notes = st.text_area("🖊️ 老師補充觀察 (為提升 AI 判定信心，建議補充以下資訊)", placeholder="1. 頻率：這是第一次發生、偶爾出現、還是穩定表現？\n2. 歷程：過程中是否失敗過？是否模仿同儕？\n3. 介入：老師有給予提示或動手幫忙嗎？\n4. 幼兒說的話：", key="input_notes")
 
@@ -337,7 +341,6 @@ with tab_record:
             with st.spinner(f"正在透過證據權重模型與官方課綱 PDF 進行深度運算..."):
                 try:
                     media_contents = []
-                    # ✨ Prompt 升級：命令 AI 同時輸出「單一主指標（統計用）」與「全指標鏈（完整記錄）」
                     prompt = f"""
                     你是一套業界頂級的幼教發展評估可解釋性 AI (XAI) 系統。請基於「證據權重模型」綜合分析上傳的「系列照片 (動態歷程)」與以下資訊：
                     - 幼兒姓名：{final_child_name}
@@ -365,13 +368,18 @@ with tab_record:
                       3. [指標三字句說明] (若有)
 
                     ### ✨ 【現有能力評估】
-                    【判定結果】：(請擇一輸出：⭐ 正在建立 / ⭐⭐ 穩定運用 / ⭐⭐⭐ 靈活遷移)
-                    【判定信心】：(請給出 0% - 100% 的估算值)
-                    【主要依據】：簡述判定成立的核心觀察。
-                    【尚缺證據】：指出若要提高信心分數還需要觀察到什麼。
+                    🎯 **判定結果**：⭐ 正在建立 / ⭐⭐ 穩定運用 / ⭐⭐⭐ 靈活遷移
 
-                    第二段 (能力說明)：
-                    描述對應發展常模的深層教育意義。
+                    🔍 **判定信心**：[請填入 0% - 100% 估算值]
+
+                    📝 **主要依據**：
+                    [請在此處獨立起行，詳述判定成立的核心觀察事實...]
+
+                    💡 **尚缺證據**：
+                    [請在此處獨立起行，指出若要提高信心分數未來還需要增補觀測到什麼行為...]
+
+                    📘 **能力說明**：
+                    [請在此處獨立起行，描述對應兒童發展常模的深層教育與常模意義...]
 
                     ### 🌱 【智慧鷹架引導】
                     ##### ☀️ ZPD 下一步推估
@@ -392,18 +400,14 @@ with tab_record:
                     st.session_state.current_child = final_child_name
                     st.session_state.current_age = final_child_age
                     
-                    # 智慧解析與提取
                     extracted_domain = "未歸類"
                     extracted_indicator = "未識別"
                     extracted_chain = "未識別"
                     
                     if "【核心領域標籤:" in report_text: extracted_domain = report_text.split("【核心領域標籤:")[1].split("】")[0].strip()
                     if "【核心指標標籤:" in report_text: extracted_indicator = report_text.split("【核心指標標籤:")[1].split("】")[0].strip()
-                    # ✨ 新增：提取完整的多重指標鏈字串
-                    if "【全指標鏈標籤:" in report_text: 
-                        extracted_chain = report_text.split("【全指標鏈標籤:")[1].split("】")[0].strip()
-                    else:
-                        extracted_chain = extracted_indicator
+                    if "【全指標鏈標籤:" in report_text: extracted_chain = report_text.split("【全指標鏈標籤:")[1].split("】")[0].strip()
+                    else: extracted_chain = extracted_indicator
                     
                     eval_summary = "⭐ 正在建立"
                     if "⭐⭐慢 穩定運用" in report_text or "⭐⭐ 穩定運用" in report_text: eval_summary = "⭐⭐ 穩定運用"
@@ -411,19 +415,19 @@ with tab_record:
                     
                     note_summary = report_text.split('### 🖍️ ')[-1].split('\n', 1)[-1].strip() if '### 🖍️ ' in report_text else "無"
                     
-                    today_str = datetime.now().strftime("%Y-%m-%d")
+                    custom_date_str = obs_date.strftime("%Y-%m-%d")
                     new_row = pd.DataFrame([{
-                        '日期': today_str, '座號': final_seat_num, '幼兒姓名': final_child_name, '幼兒年齡': final_child_age,
+                        '日期': custom_date_str, '座號': final_seat_num, '幼兒姓名': final_child_name, '幼兒年齡': final_child_age,
                         '觀察類型': obs_type, '對應領域': extracted_domain, '主要指標': extracted_indicator, '完整指標鏈': extracted_chain,
                         '現有能力評估': eval_summary, '親師溝通': note_summary[:100] + "..."
                     }])
                     st.session_state.session_history = pd.concat([st.session_state.session_history, new_row], ignore_index=True)
-                    st.toast("🎉 本次觀察已智慧連動雙向度指標與完整指標鏈！", icon="📝")
+                    st.toast(f"🎉 成功記錄在 {custom_date_str} 的縱向歷程！", icon="📝")
                         
                 except Exception as e:
                     st.error(f"系統發生錯誤，錯誤訊息：{e}")
         else:
-            st.warning("請選取或輸入幼兒姓名、年齡並至少上傳一張照片喔！")
+            st.warning("請選取或輸入幼兒姓名並至少上傳一張照片喔！")
 
     if st.session_state.generated_report:
         st.subheader("📋 專業觀察分析報告")
@@ -454,7 +458,6 @@ with tab_chart:
         if selected_child:
             df_child = df_history[df_history['幼兒姓名'] == selected_child].copy()
             
-            # 🔄 完美收合：將日期強制轉字串，根除 00:00:00.0032 微秒 Bug
             df_child['日期'] = df_child['日期'].astype(str)
             df_child = df_child.sort_values(by='日期')
             
@@ -463,7 +466,6 @@ with tab_chart:
             status_map = {"⭐ 正在建立": 1, "⭐⭐ 穩定運用": 2, "⭐⭐⭐ 靈活遷移": 3}
             df_child['能力分數'] = df_child['現有能力評估'].map(status_map).fillna(1)
             
-            # 🎨 核心繪圖引擎：依據「主要領域」多線分色呈現
             fig_line = px.line(
                 df_child, x='日期', y='能力分數', color='對應領域', markers=True, text='現有能力評估',
                 title=f"📈 {selected_child} 的跨領域能力演進圖 (各領域獨立分色)",
@@ -471,10 +473,10 @@ with tab_chart:
             )
             fig_line.update_yaxes(tickvals=[1, 2, 3], ticktext=["正在建立", "穩定運用", "靈活遷移"], range=[0.5, 3.5])
             fig_line.update_traces(textposition="top center")
-            fig_line.update_xaxes(type='category') # 鎖定 X 軸為分類格式，防微秒誤判
-            st.plotly_chart(fig_line, use_container_width=True)
+            fig_line.update_xaxes(type='category') 
+            # ✨ 完美隱藏工具列 3
+            st.plotly_chart(fig_line, use_container_width=True, config={'displayModeBar': False})
             
-            # 展示包含「完整指標鏈」的質性大表格
             st.markdown("#### 📜 歷史觀察足跡摘要")
             st.dataframe(df_child[['日期', '座號', '幼兒姓名', '幼兒年齡', '觀察類型', '對應領域', '完整指標鏈', '現有能力評估', '親師溝通']], use_container_width=True, hide_index=True)
     else:
