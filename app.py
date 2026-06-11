@@ -6,10 +6,7 @@ import os
 import pandas as pd
 from datetime import datetime
 
-# 1. 網頁風格設定 (🌟 必須是絕對第一句 Streamlit 指令，搬到最上方徹底根除 Oh no 當機)
-st.set_page_config(page_title="幼兒學習發展分析系統", page_icon="🍃", layout="centered")
-
-# 2. 隨後才進行雲端套件的安全載入檢測
+# 載入 Word 與 PDF、視覺化處理套件
 try:
     from docx import Document
     from docx.shared import Inches, Cm
@@ -18,7 +15,9 @@ try:
 except ImportError:
     st.error("⚠️ 系統繁忙，請稍後")
 
-# 網頁馬卡龍視覺風格樣式注入
+# 1. 網頁風格設定 (日系療育風、馬卡龍色系)
+st.set_page_config(page_title="幼兒學習發展分析系統", page_icon="🍃", layout="centered")
+
 st.markdown("""
     <style>
     .stApp { background-color: #f0f7fa !important; }
@@ -33,7 +32,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 3. 安全讀取 Gemini API Key
+# 2. 安全讀取 Gemini API Key
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 else:
@@ -46,7 +45,7 @@ try:
 except:
     model = genai.GenerativeModel('gemini-1.5-flash')
 
-# 4. 智慧 PDF 課綱快取引擎
+# 3. 智慧 PDF 課綱快取引擎
 @st.cache_data
 def load_curriculum_from_pdf(pdf_path):
     parsed_text = ""
@@ -97,7 +96,7 @@ if 'roster' not in st.session_state:
 if 'session_history' not in st.session_state: 
     st.session_state.session_history = pd.DataFrame(columns=['日期', '座號', '幼兒姓名', '幼兒年齡', '觀察類型', '對應領域', '主要指標', '完整指標鏈', '現有能力評估', '親師溝通'])
 
-# 5. Word 檔案生成函式
+# 4. Word 檔案生成函式
 def build_word_file(child_name, child_age, report_text, uploaded_images, template_file=None):
     report_data = {"活動紀錄": "", "領域分析": "", "能力評估": "", "智慧鷹架": "", "親師溝通": ""}
     sections = report_text.split('### ')
@@ -179,7 +178,7 @@ def build_word_file(child_name, child_age, report_text, uploaded_images, templat
     output_stream.seek(0)
     return output_stream
 
-# 6. 側邊欄：純檔案式大數據歷史載入區
+# 5. 側邊欄：純檔案式大數據歷史載入區
 with st.sidebar:
     st.markdown("### 📊 班級歷史紀錄檔案袋")
     st.write("數據皆存在您電腦本機中，系統不會留存任何隱私。")
@@ -225,7 +224,7 @@ with st.sidebar:
         fig_bar.update_layout(margin=dict(l=10, r=10, t=35, b=10), height=220, yaxis={'categoryorder':'total ascending'})
         st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
 
-# 7. 主畫面介面呈現 (大標題)
+# 6. 主畫面介面呈現 (大標題)
 st.markdown("<h1>🍃 幼兒學習發展分析系統</h1>", unsafe_allow_html=True)
 st.divider()
 
@@ -336,6 +335,7 @@ with tab_record:
 
     if st.button("🌟 生成專業觀察報告"):
         if uploaded_files and final_child_age and final_child_name:
+            # ✨ 智慧優化：載入圈圈提示詞完美換裝，自動提取幼兒姓名
             with st.spinner(f"正在進行 {final_child_name} 觀察報告的深度分析..."):
                 try:
                     media_contents = []
@@ -479,10 +479,7 @@ with tab_chart:
             st.plotly_chart(fig_line, use_container_width=True, config={'displayModeBar': False})
             
             st.markdown("#### 📜 歷史觀察足跡摘要")
-            # ✨ 欄位智慧過濾管線：精準動態抓取歷史欄位，防範任何名稱未定義衝突
-            show_cols = ['日期', '座號', '幼兒姓名', '幼兒年齡', '觀察類型', '對應領域', '完整指標鏈', '現有能力評估', '親師溝通']
-            available_cols = [col for col in show_cols if col in df_child.columns]
-            st.dataframe(df_child[available_cols], use_container_width=True, hide_index=True)
+            st.dataframe(df_child[['日期', '座號', '幼兒姓名', '幼兒年齡', '觀察類型', '對應領域', '完整指標鏈', '現有能力評估', '親師溝通']], use_container_width=True, hide_index=True)
     else:
         st.info("💡 目前歷史資料庫為空。請先在左側上傳歷史紀錄，或開始新增動態觀察吧！")
 
