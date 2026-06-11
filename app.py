@@ -6,7 +6,10 @@ import os
 import pandas as pd
 from datetime import datetime
 
-# 載入 Word 與 PDF、視覺化處理套件
+# 1. 網頁風格設定 (🌟 必須是絕對第一句 Streamlit 指令，搬到最上方徹底根除 Oh no 當機)
+st.set_page_config(page_title="幼兒學習發展分析系統", page_icon="🍃", layout="centered")
+
+# 2. 隨後才進行雲端套件的安全載入檢測
 try:
     from docx import Document
     from docx.shared import Inches, Cm
@@ -15,9 +18,7 @@ try:
 except ImportError:
     st.error("⚠️ 系統繁忙，請稍後")
 
-# 1. 網頁風格設定 (日系療育風、馬卡龍色系)
-st.set_page_config(page_title="幼兒學習發展分析系統", page_icon="🍃", layout="centered")
-
+# 網頁馬卡龍視覺風格樣式注入
 st.markdown("""
     <style>
     .stApp { background-color: #f0f7fa !important; }
@@ -32,7 +33,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# 2. 安全讀取 Gemini API Key
+# 3. 安全讀取 Gemini API Key
 if "GEMINI_API_KEY" in st.secrets:
     genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 else:
@@ -45,7 +46,7 @@ try:
 except:
     model = genai.GenerativeModel('gemini-1.5-flash')
 
-# 3. 智慧 PDF 課綱快取引擎
+# 4. 智慧 PDF 課綱快取引擎
 @st.cache_data
 def load_curriculum_from_pdf(pdf_path):
     parsed_text = ""
@@ -96,7 +97,7 @@ if 'roster' not in st.session_state:
 if 'session_history' not in st.session_state: 
     st.session_state.session_history = pd.DataFrame(columns=['日期', '座號', '幼兒姓名', '幼兒年齡', '觀察類型', '對應領域', '主要指標', '完整指標鏈', '現有能力評估', '親師溝通'])
 
-# 4. Word 檔案生成函式
+# 5. Word 檔案生成函式
 def build_word_file(child_name, child_age, report_text, uploaded_images, template_file=None):
     report_data = {"活動紀錄": "", "領域分析": "", "能力評估": "", "智慧鷹架": "", "親師溝通": ""}
     sections = report_text.split('### ')
@@ -178,7 +179,7 @@ def build_word_file(child_name, child_age, report_text, uploaded_images, templat
     output_stream.seek(0)
     return output_stream
 
-# 5. 側邊欄：純檔案式大數據歷史載入區
+# 6. 側邊欄：純檔案式大數據歷史載入區
 with st.sidebar:
     st.markdown("### 📊 班級歷史紀錄檔案袋")
     st.write("數據皆存在您電腦本機中，系統不會留存任何隱私。")
@@ -213,7 +214,6 @@ with st.sidebar:
         fig_radar = px.line_polar(plot_df, r='觀測次數', theta='領域', line_close=True, color_discrete_sequence=['#ffccbc'])
         fig_radar.update_traces(fill='toself')
         fig_radar.update_layout(polar=dict(radialaxis=dict(visible=True)), showlegend=False, margin=dict(l=30, r=30, t=30, b=30), height=200)
-        # ✨ 完美隱藏工具列 1
         st.plotly_chart(fig_radar, use_container_width=True, config={'displayModeBar': False})
         
         st.markdown("### 📂 教學情境分佈診斷 (觀察類型)")
@@ -222,12 +222,10 @@ with st.sidebar:
         context_data = {ctx: context_counts.get(ctx, 0) for ctx in all_contexts}
         context_df = pd.DataFrame(list(context_data.items()), columns=['情境', '次數'])
         fig_bar = px.bar(context_df, x='次數', y='情境', orientation='h', color_discrete_sequence=['#b2dfdb'])
-        # ✨ 完美加高呼吸空間
         fig_bar.update_layout(margin=dict(l=10, r=10, t=35, b=10), height=220, yaxis={'categoryorder':'total ascending'})
-        # ✨ 完美隱藏工具列 2：徹底消滅長條圖上疊加的放大鏡圖標
         st.plotly_chart(fig_bar, use_container_width=True, config={'displayModeBar': False})
 
-# 6. 主畫面介面呈現 (大標題)
+# 7. 主畫面介面呈現 (大標題)
 st.markdown("<h1>🍃 幼兒學習發展分析系統</h1>", unsafe_allow_html=True)
 st.divider()
 
@@ -338,7 +336,7 @@ with tab_record:
 
     if st.button("🌟 生成專業觀察報告"):
         if uploaded_files and final_child_age and final_child_name:
-            with st.spinner(f"正在透過證據權重模型與官方課綱 PDF 進行深度運算..."):
+            with st.spinner(f"正在進行 {final_child_name} 觀察報告的深度分析..."):
                 try:
                     media_contents = []
                     prompt = f"""
@@ -425,7 +423,11 @@ with tab_record:
                     st.toast(f"🎉 成功記錄在 {custom_date_str} 的縱向歷程！", icon="📝")
                         
                 except Exception as e:
-                    st.error(f"系統發生錯誤，錯誤訊息：{e}")
+                    error_msg = str(e)
+                    if "429" in error_msg or "quota" in error_msg.lower():
+                        st.error("系統正在努力中，老師請稍候 30 秒，再重新點擊一次按鈕喔！🌸")
+                    else:
+                        st.error(f"系統發生未知錯誤，錯誤訊息：{e}")
         else:
             st.warning("請選取或輸入幼兒姓名並至少上傳一張照片喔！")
 
@@ -474,11 +476,13 @@ with tab_chart:
             fig_line.update_yaxes(tickvals=[1, 2, 3], ticktext=["正在建立", "穩定運用", "靈活遷移"], range=[0.5, 3.5])
             fig_line.update_traces(textposition="top center")
             fig_line.update_xaxes(type='category') 
-            # ✨ 完美隱藏工具列 3
             st.plotly_chart(fig_line, use_container_width=True, config={'displayModeBar': False})
             
             st.markdown("#### 📜 歷史觀察足跡摘要")
-            st.dataframe(df_child[['日期', '座號', '幼兒姓名', '幼兒年齡', '觀察類型', '對應領域', '完整指標鏈', '現有能力評估', '親師溝通']], use_container_width=True, hide_index=True)
+            # ✨ 欄位智慧過濾管線：精準動態抓取歷史欄位，防範任何名稱未定義衝突
+            show_cols = ['日期', '座號', '幼兒姓名', '幼兒年齡', '觀察類型', '對應領域', '完整指標鏈', '現有能力評估', '親師溝通']
+            available_cols = [col for col in show_cols if col in df_child.columns]
+            st.dataframe(df_child[available_cols], use_container_width=True, hide_index=True)
     else:
         st.info("💡 目前歷史資料庫為空。請先在左側上傳歷史紀錄，或開始新增動態觀察吧！")
 
